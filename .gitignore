@@ -1,0 +1,17 @@
+# Ignore local IDE settings
+*.idea
+*.iml
+*.ipynb_checkpoints
+*.suo
+*.vs
+.vscode
+
+#ignore .venv
+*.venv
+
+backend/__pycache__/*
+backend/data/logs/*
+
+
+frontend/admin/node_modules/*
+frontend/client/node_modules/*
