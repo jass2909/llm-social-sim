@@ -6,13 +6,15 @@ interface Log {
 }
 
 export default function SimulationControl() {
+  const [topic, setTopic] = useState('')
   const [rounds, setRounds] = useState(6)
+  
   const [running, setRunning] = useState(false)
   const [logs, setLogs] = useState<Log[]>([])
 
   const startSim = async () => {
     setRunning(true)
-    const res = await axios.post(`http://localhost:8000/simulate?rounds=${rounds}`)
+    const res = await axios.post(`http://localhost:8000/simulate?rounds=${rounds}`, { message: topic })
     setLogs(res.data.conversation)
     setRunning(false)
   }
@@ -23,6 +25,16 @@ export default function SimulationControl() {
         🧠 Simulation Dashboard
       </h1>
       <div className="flex items-center space-x-4">
+        <label htmlFor="topic" className="text-gray-700 font-semibold">
+          Topic:
+        </label>
+        <input
+          id="topic"
+          type="text"
+          value={topic}
+          onChange={e => setTopic(e.target.value)}
+          className="w-48 border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
         <label htmlFor="rounds" className="text-gray-700 font-semibold">
           Rounds:
         </label>
@@ -36,7 +48,7 @@ export default function SimulationControl() {
         />
         <button
           onClick={startSim}
-          disabled={running}
+          disabled={running || topic.trim() === ''}
           className="ml-auto bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold px-5 py-2 rounded-md transition-colors duration-200 disabled:cursor-not-allowed"
         >
           {running ? 'Running…' : 'Run Simulation'}

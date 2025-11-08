@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import './index.css'
 
 export default function Feed() {
   const [posts, setPosts] = useState([])
@@ -14,7 +13,6 @@ export default function Feed() {
     setLoading(false)
   }
 
-  useEffect(() => { runSimulation() }, [])
 
   return (
     <div className="max-w-2xl mx-auto p-4">

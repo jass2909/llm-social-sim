@@ -24,8 +24,9 @@ def get_bots():
         return json.load(f)
 
 @app.post("/simulate")
-def simulate(rounds: int = 5):
-    return {"conversation": run_local_simulation(rounds)}
+def simulate(rounds: int = 5, body: dict = Body(default={})):
+    message = body.get("message")
+    return {"conversation": run_local_simulation(rounds, message)}
 
 @app.get("/logs")
 def get_logs():

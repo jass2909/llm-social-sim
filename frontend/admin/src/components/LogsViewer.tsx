@@ -11,8 +11,7 @@ export default function LogsViewer() {
 
   const refreshLogs = async () => {
     const res = await axios.get(`http://localhost:8000/logs`)
-    setLogs(res.data.conversation)
-  }
+    setLogs(res.data || [])  }
 
   return (
     <div className="p-6 space-y-4">

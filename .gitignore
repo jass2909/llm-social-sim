@@ -16,3 +16,4 @@ backend/data/logs/*
 frontend/admin/node_modules/*
 frontend/client/node_modules/*
 node_modules
+frontend/.DS_Store
