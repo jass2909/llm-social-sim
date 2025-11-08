@@ -1,0 +1,32 @@
+{
+  "name": "llm-social-sim",
+  "version": "1.0.0",
+  "description": "⸻",
+  "main": "index.js",
+  "scripts": {
+    "start:backend": "uvicorn backend.main:app --reload",
+    "start:client": "cd frontend/client && npm run dev",
+    "start:admin": "cd frontend/admin && npm run dev",
+    "start:all": "concurrently -n BACKEND,CLIENT,ADMIN -c green,cyan,magenta \"npm run start:backend\" \"npm run start:client\" \"npm run start:admin\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jass2909/llm-social-sim.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jass2909/llm-social-sim/issues"
+  },
+  "homepage": "https://github.com/jass2909/llm-social-sim#readme",
+  "dependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17"
+  }
+}

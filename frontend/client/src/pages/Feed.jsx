@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import './index.css'
 
 export default function Feed() {
   const [posts, setPosts] = useState([])
@@ -25,7 +26,7 @@ export default function Feed() {
           {loading ? 'Running…' : 'Run Simulation'}
         </button>
       </div>
-
+    {posts.length === 0 && <p>No posts loaded yet</p>}
       {posts.map((p, i) => (
         <div key={i} className="p-4 mb-3 border rounded shadow">
           <b>{p.bot}</b>
