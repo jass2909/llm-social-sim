@@ -36,6 +36,32 @@ def get_logs():
             return json.load(f)
     return []
 
+@app.get("/posts")
+def get_posts():
+    path = "backend/data/logs/posts.json"
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return []
+
+
+# New POST /posts endpoint
+@app.post("/posts")
+def create_post(post: dict = Body(...)):
+    path = "backend/data/logs/posts.json"
+    posts = []
+    if os.path.exists(path):
+        with open(path) as f:
+            try:
+                posts = json.load(f)
+            except json.JSONDecodeError:
+                posts = []
+    posts.append(post)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(posts, f, indent=2)
+    return {"message": "Post created", "post": post}
+
 @app.post("/ask")
 def ask_bot(bot: str = Query(...), question: dict = Body(...)):
     with open("backend/bots/personas.json") as f:
