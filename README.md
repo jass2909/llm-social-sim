@@ -53,7 +53,9 @@ ollama --version
 The default bots use these models (you can adjust in backend/bots/personas.json):
 
 ollama pull mistral:7b
+
 ollama pull llama3
+
 ollama pull gemma:2b
 
 Check installation:
