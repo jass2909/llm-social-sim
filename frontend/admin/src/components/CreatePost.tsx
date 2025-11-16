@@ -7,7 +7,7 @@ interface CreatePostProps {
 
 export default function CreatePost({ onPostCreated }: CreatePostProps) {
   const [bot, setBot] = useState("")
-  const [reply, setReply] = useState("")
+  const [text, setText] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
@@ -36,10 +36,14 @@ useEffect(() => {
     setError("")
     setSuccess("")
     try {
-      const res = await axios.post("http://localhost:8000/posts", { bot, reply })
+      const res = await axios.post(
+        "http://localhost:8000/posts",
+        { bot, text },
+        { headers: { "Content-Type": "application/json" } }
+      )
       setSuccess("✅ Post created successfully!")
       setBot("")
-      setReply("")
+      setText("")
       if (onPostCreated) onPostCreated(res.data.post)
     } catch (err) {
       console.error(err)
@@ -68,8 +72,8 @@ useEffect(() => {
         </select>
         <textarea
           placeholder="Write your post..."
-          value={reply}
-          onChange={(e) => setReply(e.target.value)}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
           className="border p-2 rounded min-h-[100px]"
           required
         />

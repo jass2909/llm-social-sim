@@ -23,27 +23,45 @@ class OllamaBot(BaseBot):
             json.dump(self.conversation, f)
 
     def reply(self, message: str):
-        # Preserve chat history across sessions
+        # Preserve history
         self.conversation.append({"role": "user", "content": message})
-
-        response = ollama.chat(
-            model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are {self.persona}. "
-                        "Respond naturally and emotionally, like a real person in a conversation. "
-                        "Avoid repeating who you are or summarizing too formally. "
-                        "Use empathy, casual phrasing, and a bit of spontaneity when appropriate."
-                    ),
-                },
-                *self.conversation,
-            ],
-            options={"temperature": 0.8},
+        
+        # Build full prompt with persona + memory
+        full_context = (
+            f"You are {self.persona}. "
+            "Respond naturally and emotionally, like a real person in a conversation. "
+            "Avoid repeating who you are or summarizing too formally. "
+            "Use empathy, casual phrasing, and a bit of spontaneity.\n\n"
         )
 
-        reply_text = response["message"]["content"].strip()
+        for turn in self.conversation:
+            role = turn["role"]
+            content = turn["content"]
+            full_context += f"{role}: {content}\n"
+
+        temperature=0.7
+        top_p=0.95
+        top_k=40
+        repeat_penalty=1.1
+        max_tokens=150
+
+        response = ollama.generate(
+            model=self.model,
+            prompt=full_context,
+            options={
+                "temperature": temperature,
+                "top_p": top_p,
+                "top_k": top_k,
+                "repeat_penalty": repeat_penalty,
+                "num_predict": max_tokens,  # correct parameter for generate()
+                
+            },
+        
+        )
+
+        reply_text = response["response"].strip()
+
+        # Save as assistant turn
         self.conversation.append({"role": "assistant", "content": reply_text})
         self._save_memory()
 

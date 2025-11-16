@@ -16,3 +16,8 @@ frontend/client/node_modules/*
 node_modules
 frontend/.DS_Store
 backend/bots/__pycache__/*
+backend/firestore/llm-social-firebase-adminsdk-fbsvc-48e39d614e.json
+backend/.DS_Store
+.DS_Store
+backend/firestore/__pycache__/firebase.cpython-310.pyc
+backend/firestore/firebase_service_account.json

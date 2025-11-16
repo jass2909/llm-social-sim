@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import Post from '../components/Post'
+import Post from './Post'
 
 export default function Feed() {
   const [posts, setPosts] = useState([])
@@ -19,7 +19,7 @@ export default function Feed() {
 
   return (
     <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">🤖 LLM Social Feed</h1>
+      <h1 className="text-2xl font-bold mb-4">Posts</h1>
       {Array.isArray(posts) && posts.length === 0 && <p>No posts loaded yet</p>}
       {Array.isArray(posts)
         ? posts.map((p, i) => (
@@ -27,6 +27,8 @@ export default function Feed() {
               key={i}
               bot={p.bot}
               text={p.text}
+              postId={p.id}
+              comments={p.comments}
             />
           ))
         : <p>Invalid posts data</p>}
