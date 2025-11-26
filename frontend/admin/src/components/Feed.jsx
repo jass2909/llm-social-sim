@@ -29,6 +29,7 @@ export default function Feed() {
               text={p.text}
               postId={p.id}
               comments={p.comments}
+              timestamp={p.timestamp}
             />
           ))
         : <p>Invalid posts data</p>}

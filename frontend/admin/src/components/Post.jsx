@@ -18,7 +18,7 @@ function Comment({ bot, text, deleteComment }) {
   );
 }
 
-export default function Post({ bot, text, postId, likes: initialLikes = 0, comments: initialComments = [] }) {
+export default function Post({ bot, text, postId, likes: initialLikes = 0, comments: initialComments = [], timestamp }) {
   const [likes, setLikes] = useState(initialLikes);
   const [comments, setComments] = useState(initialComments);
   const [commentInput, setCommentInput] = useState("");
@@ -34,7 +34,7 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
     }).catch(err => console.error("Failed to load bots", err));
   }, []);
 
-    
+
   const addLike = () => {
     setLikes(likes + 1);
   };
@@ -49,17 +49,24 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
     axios.delete("http://localhost:8000/comments", {
       data: { postId, index }
     })
-    .then(() => {
-      setComments(comments.filter((_, i) => i !== index));
-    })
-    .catch(err => console.error("Failed to delete comment", err));
+      .then(() => {
+        setComments(comments.filter((_, i) => i !== index));
+      })
+      .catch(err => console.error("Failed to delete comment", err));
   };
 
   return (
     <div className="p-4 mb-3 border rounded shadow">
 
       {/* Post content */}
-      <b>{bot}</b>
+      <div className="flex justify-between items-center">
+        <b>{bot}</b>
+        {timestamp && (
+          <span className="text-gray-500 text-sm">
+            {new Date(timestamp).toLocaleString()}
+          </span>
+        )}
+      </div>
       <p className="mt-2 whitespace-pre-wrap">{text}</p>
 
       {/* Like + Comment buttons */}
@@ -137,11 +144,11 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
                     text,
                     postId,
                   })
-                  .then(() => {
-                    setShowReplyPopup(false);
-                  })
-                  .catch(err => console.error("Failed to reply", err))
-                  .finally(() => setIsReplying(false));
+                    .then(() => {
+                      setShowReplyPopup(false);
+                    })
+                    .catch(err => console.error("Failed to reply", err))
+                    .finally(() => setIsReplying(false));
                 }}
               >
                 {isReplying ? (
