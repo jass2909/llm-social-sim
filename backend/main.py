@@ -107,6 +107,11 @@ def reply_to_post(body: ReplyInput):
     post_data = snapshot.to_dict()
     original_text = post_data.get("text", "")
 
+    # Check if bot has already replied
+    existing_comments = post_data.get("comments", [])
+    if any(c.get("bot") == matching["name"] for c in existing_comments):
+        raise HTTPException(status_code=400, detail="Bot has already replied to this post")
+
     # Generate reply using LLM bot
     ollama_bot = OllamaBot(matching["name"], matching["model"], matching["persona"])
     generated_reply = ollama_bot.reply(original_text)
