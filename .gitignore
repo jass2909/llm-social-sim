@@ -21,3 +21,14 @@ backend/.DS_Store
 .DS_Store
 backend/firestore/__pycache__/firebase.cpython-310.pyc
 backend/firestore/firebase_service_account.json
+ollama.log
+backend/ml/__pycache__/agent.cpython-310.pyc
+backend/ml/__pycache__/environment.cpython-310.pyc
+backend/ml/__pycache__/explain.cpython-310.pyc
+backend/ml/models/social_sim_dqn/_stable_baselines3_version
+backend/ml/models/social_sim_dqn/data
+backend/ml/models/social_sim_dqn/policy.optimizer.pth
+backend/ml/models/social_sim_dqn/policy.pth
+backend/ml/models/social_sim_dqn/system_info.txt
+backend/ml/models/social_sim_dqn/pytorch_variables.pth
+backend/ml/models/social_sim_dqn.zip

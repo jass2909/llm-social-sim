@@ -66,3 +66,28 @@ class OllamaBot(BaseBot):
         self._save_memory()
 
         return reply_text
+
+    def generate_from_strategy(self, strategy: str):
+        """
+        Generates a new post based on a specific strategy (Topic/Tone).
+        """
+        prompt = (
+            f"You are {self.persona}. "
+            f"Write a social media post that follows this strategy: {strategy}. "
+            "Keep it engaging, authentic to your persona, and under 280 characters."
+        )
+        
+        try:
+            response = ollama.generate(
+                model=self.model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.8,
+                    "num_predict": 100, 
+                },
+            )
+            return response["response"].strip()
+        except Exception as e:
+            # Fallback for when Ollama is not running (Demonstration purposes)
+            print(f"Ollama Error: {e}")
+            return f"[Mock Content] Hey! I'm {self.name} and I think '{strategy}' is a cool strategy! (Ollama disconnected)"

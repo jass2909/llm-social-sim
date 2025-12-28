@@ -53,6 +53,52 @@ useEffect(() => {
     }
   }
 
+  const handleAutoGenerate = async () => {
+    setLoading(true)
+    setError("")
+    setSuccess("")
+    try {
+      // 1. Pick a random bot
+      if (bots.length === 0) {
+        setError("No bots available to generate posts.")
+        setLoading(false)
+        return
+      }
+      const randomBot = bots[Math.floor(Math.random() * bots.length)]
+      // @ts-ignore
+      const botName = randomBot.name || "Clara"
+
+      // 2. Generate Content via ML
+      // We send -1 to tell backend to use Real Database Stats
+      const genRes = await axios.post(`http://localhost:8000/ml/generate?bot=${botName}`, {
+        likes: -1,
+        comments: -1,
+        sentiment: 0.9,
+        interaction: 0.8
+      })
+      
+      const { generated_content, bot: generatedBot } = genRes.data
+      
+      // 2. Publish the Post
+      const postRes = await axios.post(
+        "http://localhost:8000/posts",
+        { bot: generatedBot, text: generated_content },
+        { headers: { "Content-Type": "application/json" } }
+      )
+
+      setSuccess(`✨ AI Created a post using strategy: ${genRes.data.strategy_used}`)
+      setBot("")
+      setText("")
+      if (onPostCreated) onPostCreated(postRes.data)
+      
+    } catch (err) {
+      console.error(err)
+      setError("❌ Failed to auto-generate post")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto p-4 bg-white rounded-xl shadow mt-6">
       <h2 className="text-xl font-semibold mb-3">Create a Post</h2>
@@ -77,13 +123,23 @@ useEffect(() => {
           className="border p-2 rounded min-h-[100px]"
           required
         />
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded disabled:opacity-50"
-        >
-          {loading ? "Posting..." : "Post"}
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded disabled:opacity-50"
+          >
+            {loading ? "Posting..." : "Post"}
+          </button>
+          <button
+            type="button"
+            onClick={handleAutoGenerate}
+            disabled={loading}
+            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? "Thinking..." : "✨ Auto-Generate & Post"}
+          </button>
+        </div>
       </form>
       {error && <p className="text-red-500 mt-2">{error}</p>}
       {success && <p className="text-green-600 mt-2">{success}</p>}
