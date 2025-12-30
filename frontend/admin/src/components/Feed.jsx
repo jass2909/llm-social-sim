@@ -28,6 +28,7 @@ export default function Feed() {
               bot={p.bot}
               text={p.text}
               postId={p.id}
+              likes={p.likes}
               comments={p.comments}
               timestamp={p.timestamp}
             />
