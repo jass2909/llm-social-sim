@@ -32,3 +32,13 @@ backend/ml/models/social_sim_dqn/policy.pth
 backend/ml/models/social_sim_dqn/system_info.txt
 backend/ml/models/social_sim_dqn/pytorch_variables.pth
 backend/ml/models/social_sim_dqn.zip
+
+# Vector DB
+backend/data/chroma/
+adapters/
+sentiment140-llama3.2-q4_k_m.gguf
+
+training/data/
+models/
+backend/memory/
+training/Modelfile

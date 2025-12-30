@@ -122,7 +122,9 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
             >
               <option value="">Select a bot...</option>
               {bots.map((b, i) => (
-                <option key={i} value={b.name}>{b.name}</option>
+                <option key={i} value={b.name}>
+                  {b.name} {b.profile?.traits ? `(${b.profile.traits.join(", ")})` : ""}
+                </option>
               ))}
             </select>
 

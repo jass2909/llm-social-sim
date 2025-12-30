@@ -81,7 +81,7 @@ def ask_bot(bot: str = Query(...), question: dict = Body(...)):
     if not matching:
         raise HTTPException(status_code=404, detail={"error": f"Bot '{bot}' not found"})
 
-    ollama_bot = OllamaBot(matching["name"], matching["model"], matching["persona"])
+    ollama_bot = OllamaBot(matching["name"], matching["model"], matching)
     answer = ollama_bot.reply(question.get("question", ""))
     return {"bot": bot, "reply": answer}
 
@@ -115,7 +115,7 @@ def reply_to_post(body: ReplyInput):
         raise HTTPException(status_code=400, detail="Bot has already replied to this post")
 
     # Generate reply using LLM bot
-    ollama_bot = OllamaBot(matching["name"], matching["model"], matching["persona"])
+    ollama_bot = OllamaBot(matching["name"], matching["model"], matching)
     generated_reply = ollama_bot.reply(original_text)
 
     # Append reply to comments in Firestore
@@ -151,6 +151,19 @@ def delete_comment(body: DeleteCommentInput):
 
     return {"message": "Comment deleted"}
     return {"message": "Comment deleted"}
+
+
+@app.post("/posts/{post_id}/like")
+def like_post(post_id: str):
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Post not found")
+        
+    post_ref.update({"likes": firestore.Increment(1)})
+    
+    return {"message": "Post liked", "id": post_id}
 
 
 # ---------------- ML Endpoints ----------------
@@ -274,7 +287,7 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
         bots = json.load(f)
     matching = next((b for b in bots if b["name"] == bot), bots[0])
     
-    ollama_bot = OllamaBot(matching["name"], matching["model"], matching["persona"])
+    ollama_bot = OllamaBot(matching["name"], matching["model"], matching)
     post_content = ollama_bot.generate_from_strategy(strategy)
     
     return {

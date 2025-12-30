@@ -8,3 +8,4 @@ shap
 matplotlib
 scikit-learn
 pandas
+chromadb

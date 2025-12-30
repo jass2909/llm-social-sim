@@ -2,14 +2,30 @@ import os
 import json
 import ollama
 from backend.bots.base_bot import BaseBot
+from backend.memory.vector_store import VectorStore
+from backend.bots.prompt_utils import construct_system_prompt, construct_reply_prompt
 
 
 class OllamaBot(BaseBot):
-    def __init__(self, name, model, persona):
-        super().__init__(name, model, persona)
+    def __init__(self, name, model, persona_data):
+        # Handle both string (old) and dict (new) persona inputs for safety
+        if isinstance(persona_data, dict):
+            self.persona_data = persona_data
+            persona_prompt = construct_system_prompt(persona_data)
+        else:
+            self.persona_data = {}
+            persona_prompt = persona_data
+
+        super().__init__(name, model, persona_prompt)
         self.name = name
         self.memory_path = os.path.join("backend", "data", "logs", f"memory_{self.name.replace(' ', '_')}.json")
         self._load_memory()
+        
+        # Initialize Vector Store (Long-term memory)
+        # Sanitize name for ChromaDB (only allows alphanumerics, underscores, dashes)
+        import re
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', self.name.replace(' ', '_').lower())
+        self.vector_store = VectorStore(collection_name=safe_name)
 
     def _load_memory(self):
         if os.path.exists(self.memory_path):
@@ -22,17 +38,41 @@ class OllamaBot(BaseBot):
         with open(self.memory_path, "w") as f:
             json.dump(self.conversation, f)
 
+    def remember(self, text: str, metadata: dict = None):
+        """
+        Store a text in long-term memory.
+        """
+        self.vector_store.add_memory(text, metadata)
+
     def reply(self, message: str):
         # Preserve history
         self.conversation.append({"role": "user", "content": message})
         
         # Build full prompt with persona + memory
-        full_context = (
-            f"You are {self.persona}. "
-            "Respond naturally and emotionally, like a real person in a conversation. "
-            "Avoid repeating who you are or summarizing too formally. "
-            "Use empathy, casual phrasing, and a bit of spontaneity.\n\n"
-        )
+        
+        # Retrieve relevant past context
+        relevant_docs, _ = self.vector_store.search_memory(message, n_results=3)
+        context_str = "\n".join([f"- {doc}" for doc in relevant_docs]) if relevant_docs else "No relevant past memories."
+
+        # Build prompt: Use new format if structured data is available
+        if getattr(self, "persona_data", None):
+            full_context = construct_reply_prompt(self.persona_data, message)
+            # Append memory content if relevant?
+            # User format doesn't explicitly ask for memory, but it's good practice.
+            # However, user format ends with "Write a reply...", so appending memory after might break flow?
+            # Let's append memory as "Additional Context" before the final instruction.
+            if relevant_docs:
+                full_context = full_context.replace("Context:\nAnother user wrote:", 
+                    f"Past Memories:\n{context_str}\n\nContext:\nAnother user wrote:")
+        else:
+            # Fallback to old behavior
+            full_context = (
+                f"You are {self.persona}. "
+                "Respond naturally and emotionally, like a real person in a conversation. "
+                "Avoid repeating who you are or summarizing too formally. "
+                "Use empathy, casual phrasing, and a bit of spontaneity.\n\n"
+                f"RELEVANT PAST MEMORIES/CONTEXT:\n{context_str}\n\n"
+            )
 
         for turn in self.conversation:
             role = turn["role"]
@@ -64,6 +104,9 @@ class OllamaBot(BaseBot):
         # Save as assistant turn
         self.conversation.append({"role": "assistant", "content": reply_text})
         self._save_memory()
+        
+        # Save to Vector DB
+        self.remember(f"User: {message}\nMe: {reply_text}", metadata={"type": "conversation"})
 
         return reply_text
 
@@ -71,10 +114,15 @@ class OllamaBot(BaseBot):
         """
         Generates a new post based on a specific strategy (Topic/Tone).
         """
+        # Retrieve examples of past posts with similar strategy/content
+        relevant_docs, _ = self.vector_store.search_memory(strategy, n_results=3)
+        context_str = "\n".join([f"- {doc}" for doc in relevant_docs]) if relevant_docs else "No relevant past posts."
+
         prompt = (
             f"You are {self.persona}. "
             f"Write a social media post that follows this strategy: {strategy}. "
-            "Keep it engaging, authentic to your persona, and under 280 characters."
+            "Keep it engaging, authentic to your persona, and under 280 characters.\n\n"
+            f"YOUR PAST POSTS ON SIMILAR TOPICS (for style reference):\n{context_str}\n"
         )
         
         try:
@@ -86,7 +134,10 @@ class OllamaBot(BaseBot):
                     "num_predict": 100, 
                 },
             )
-            return response["response"].strip()
+            content = response["response"].strip()
+            # Save to Vector DB
+            self.remember(content, metadata={"type": "post", "strategy": strategy})
+            return content
         except Exception as e:
             # Fallback for when Ollama is not running (Demonstration purposes)
             print(f"Ollama Error: {e}")
