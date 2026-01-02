@@ -544,6 +544,34 @@ def explain_decision(data: PredictInput):
     explanation = explain_agent_decision(obs)
     return {"explanation": explanation}
 
+class ExplainTextInput(BaseModel):
+    bot: str
+    text: str
+
+@app.post("/ml/explain_text")
+def explain_text_interaction(data: ExplainTextInput):
+    # 1. Get LIME Explanation
+    from backend.ml.lime_explainer import LIMEExplainer
+    explainer = LIMEExplainer()
+    lime_exp = explainer.explain(data.bot, data.text)
+
+    # 2. Get Own Explanation (CoT)
+    # Load persona
+    with open("backend/bots/personas.json") as f:
+        bots = json.load(f)
+    bot_data = next((b for b in bots if b["name"] == data.bot), None)
+    
+    own_decision, own_reason = "UNKNOWN", "Bot not found"
+    if bot_data:
+        ollama_bot = OllamaBot(data.bot, bot_data["model"], bot_data)
+        own_decision, own_reason = ollama_bot.decide_interaction(data.text)
+    
+    return {
+        "lime_explanation": lime_exp,
+        "own_decision": own_decision,
+        "own_reason": own_reason
+    }
+
 @app.post("/ml/generate")
 def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
     # 1. Get Agent Strategy

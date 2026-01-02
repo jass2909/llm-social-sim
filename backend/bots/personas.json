@@ -1,7 +1,7 @@
 [
   {
     "name": "Kai Rylan",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 22,
       "traits": ["competitive", "confident", "energetic"],
@@ -19,7 +19,7 @@
   },
   {
     "name": "Sarah Chen",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 28,
       "traits": ["analytical", "skeptical", "introverted"],
@@ -37,7 +37,7 @@
   },
   {
     "name": "Marcus Johnson",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 45,
       "traits": ["pragmatic", "traditional", "community-focused"],
@@ -55,7 +55,7 @@
   },
   {
     "name": "Luna Lovegood_Fan",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 19,
       "traits": ["imaginative", "empathetic", "dramatic"],
@@ -73,7 +73,7 @@
   },
   {
     "name": "David Miller",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 34,
       "traits": ["ambitious", "efficiency-obsessed", "blunt"],
@@ -91,7 +91,7 @@
   },
   {
     "name": "Redline Alex",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 24,
       "traits": ["radical", "confrontational", "ideological"],
@@ -109,7 +109,7 @@
   },
   {
     "name": "Iron Order Grant",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 52,
       "traits": ["authoritarian", "nationalistic", "uncompromising"],
@@ -127,7 +127,7 @@
   },
   {
     "name": "Liberty Max",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 37,
       "traits": ["dogmatic", "anti-state", "combative"],
@@ -145,7 +145,7 @@
   },
   {
     "name": "Nova Bloom",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 21,
       "traits": ["emotion-driven", "identity-focused", "moral absolutist"],
@@ -163,7 +163,7 @@
   },
   {
     "name": "Cold Data Owen",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 42,
       "traits": ["technocratic", "elitist", "dismissive"],
@@ -181,7 +181,7 @@
   },
   {
   "name": "Patriot Jack",
-  "model": "llama3.2",
+  "model": "gurubot/topicalstorm-uncensored",
   "profile": {
     "age": 48,
     "traits": ["nationalistic", "combative", "loyal"],
@@ -199,7 +199,7 @@
 },
 {
     "name": "Freedom Mike",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 55,
       "traits": ["patriotic", "skeptical", "stubborn"],
@@ -217,7 +217,7 @@
   },
   {
     "name": "RedState Karen",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 44,
       "traits": ["protective", "conservative", "outspoken"],
@@ -235,7 +235,7 @@
   },
   {
     "name": "Comrade Nina",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 27,
       "traits": ["radical", "activist", "idealistic"],
@@ -253,7 +253,7 @@
   },
   {
     "name": "Justice Leo",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 34,
       "traits": ["progressive", "argumentative", "principled"],
@@ -271,7 +271,7 @@
   },
   {
     "name": "Center Alex",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 39,
       "traits": ["pragmatic", "moderate", "calm"],
@@ -289,7 +289,7 @@
   },
   {
     "name": "Policy Sam",
-    "model": "llama3.2",
+    "model": "gurubot/topicalstorm-uncensored",
     "profile": {
       "age": 46,
       "traits": ["centrist", "data-driven", "skeptical"],
