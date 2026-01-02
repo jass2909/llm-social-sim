@@ -41,10 +41,6 @@ def simulate(rounds: int = 5, body: dict = Body(default={})):
 
 @app.get("/logs")
 def get_logs():
-    path = "backend/data/logs/conversation.json"
-    if os.path.exists(path):
-        with open(path) as f:
-            return json.load(f)
     return []
 
 @app.get("/posts")

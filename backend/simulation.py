@@ -25,7 +25,4 @@ def run_local_simulation(rounds=5, message=None):
         message = reply
         time.sleep(0.2)
 
-    with open("backend/data/logs/conversation.json", "w") as f:
-        json.dump(conversation, f, indent=2)
-
     return conversation

@@ -18,25 +18,13 @@ class OllamaBot(BaseBot):
 
         super().__init__(name, model, persona_prompt)
         self.name = name
-        self.memory_path = os.path.join("backend", "data", "logs", f"memory_{self.name.replace(' ', '_')}.json")
-        self._load_memory()
+        self.conversation = []
         
         # Initialize Vector Store (Long-term memory)
         # Sanitize name for ChromaDB (only allows alphanumerics, underscores, dashes)
         import re
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', self.name.replace(' ', '_').lower())
         self.vector_store = VectorStore(collection_name=safe_name)
-
-    def _load_memory(self):
-        if os.path.exists(self.memory_path):
-            with open(self.memory_path, "r") as f:
-                self.conversation = json.load(f)
-        else:
-            self.conversation = []
-
-    def _save_memory(self):
-        with open(self.memory_path, "w") as f:
-            json.dump(self.conversation, f)
 
     def remember(self, text: str, metadata: dict = None):
         """
@@ -118,7 +106,7 @@ class OllamaBot(BaseBot):
 
         # Save as assistant turn
         self.conversation.append({"role": "assistant", "content": reply_text})
-        self._save_memory()
+
         
         # Save to Vector DB
         self.remember(f"User: {message}\nMe: {reply_text}", metadata={"type": "conversation"})
