@@ -24,6 +24,8 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
   const [commentInput, setCommentInput] = useState("");
 
   const [showReplyPopup, setShowReplyPopup] = useState(false);
+  const [showSimulateOptions, setShowSimulateOptions] = useState(false);
+  const [simulationResult, setSimulationResult] = useState(null);
   const [bots, setBots] = useState([]);
   const [selectedBot, setSelectedBot] = useState("");
   const [isReplying, setIsReplying] = useState(false);
@@ -53,6 +55,37 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
         setComments(comments.filter((_, i) => i !== index));
       })
       .catch(err => console.error("Failed to delete comment", err));
+  };
+
+  const handleSimulate = async (mode = "single") => {
+    setShowSimulateOptions(false); // Close options if open
+    try {
+        const res = await axios.post(`http://localhost:8000/posts/${postId}/simulate_interaction?mode=${mode}`);
+        console.log(res.data);
+        
+        if (res.data.type === "batch") {
+            // Update local state based on batch results
+            let newLikes = 0;
+            const newComments = [];
+            res.data.results.forEach(r => {
+                if (r.type === "like") newLikes++;
+                else if (r.type === "comment") newComments.push({ bot: r.bot, text: r.comment });
+            });
+            setLikes(likes + newLikes);
+            setComments([...comments, ...newComments]);
+        } else {
+            // Single result
+            if (res.data.type === "like") {
+                setLikes(likes + 1);
+            } else if (res.data.type === "comment") {
+                const newComment = { bot: res.data.bot, text: res.data.comment };
+                setComments([...comments, newComment]);
+            }
+        }
+        setSimulationResult(res.data);
+    } catch (error) {
+        console.error("Simulation failed:", error);
+    }
   };
 
   return (
@@ -89,6 +122,12 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
           className="bg-red-500 text-white px-3 py-1 rounded"
         >
           Reply as Bot
+        </button>
+        <button
+          onClick={() => setShowSimulateOptions(true)}
+          className="bg-purple-600 text-white px-3 py-1 rounded"
+        >
+          ⚡️ Simulate
         </button>
       </div>
 
@@ -158,6 +197,59 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
                 ) : (
                   "Reply"
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSimulateOptions && (
+        <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-20 flex items-center justify-center">
+          <div className="bg-white p-4 rounded shadow w-80">
+            <h2 className="font-bold mb-2">Simulate Interaction</h2>
+            <p className="mb-4">Choose simulation mode:</p>
+            <div className="flex flex-col gap-2">
+                <button
+                    onClick={() => handleSimulate("single")}
+                    className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+                >
+                    🎲 Random Bot
+                </button>
+                <button
+                    onClick={() => handleSimulate("all")}
+                    className="bg-purple-600 text-white p-2 rounded hover:bg-purple-700"
+                >
+                    ⚡️ All Bots (Batch)
+                </button>
+                <button
+                    onClick={() => setShowSimulateOptions(false)}
+                    className="mt-2 text-gray-500 underline"
+                >
+                    Cancel
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {simulationResult && (
+        <div className="fixed inset-0 z-50 bg-gray-900 bg-opacity-20 flex items-center justify-center">
+          <div className="bg-white p-4 rounded shadow w-80">
+            <h2 className="font-bold mb-2">Simulation Result</h2>
+            <div className={`p-2 mb-3 rounded ${
+                simulationResult.type === 'like' ? 'bg-blue-100 text-blue-800' :
+                simulationResult.type === 'comment' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-800'
+            }`}>
+                {simulationResult.message}
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                onClick={() => setSimulationResult(null)}
+                className="px-3 py-1 bg-blue-600 text-white rounded"
+              >
+                Close
               </button>
             </div>
           </div>

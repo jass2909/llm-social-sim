@@ -56,8 +56,11 @@ export default function Feed() {
           ? posts.map((p, i) => (
             <Post
               key={i}
+              id={p.id}
               bot={p.bot}
               text={p.text}
+              likes={p.likes}
+              comments={p.comments}
             />
           ))
           : <div className="p-4 text-red-500">Invalid posts data</div>}

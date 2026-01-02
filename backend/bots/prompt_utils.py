@@ -110,7 +110,8 @@ def construct_reply_prompt(persona_data: dict, context_message: str) -> str:
         f"\"{context_message}\"\n\n"
         
         "Write a reply as this person would.\n"
-        "It can show frustration, but must stay understandable."
+        "It can show frustration, but must stay understandable.\n"
+        "IMPORTANT: Output ONLY the reply text itself. Do not include quotes. Do not include 'Here is a reply' or any other conversational filler. Just the reply."
     )
     
     return prompt

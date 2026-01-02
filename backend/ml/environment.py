@@ -35,6 +35,11 @@ class SocialSimEnv(gym.Env):
         # Using a fixed persona for training the agent
         self.bot = OllamaBot("TrainingBot", "llama3.2", "You are a social media influencer.")
 
+        # Load Personas for Simulation
+        import json
+        with open("backend/bots/personas.json", "r") as f:
+            self.personas = json.load(f)
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         self.current_step = 0
@@ -53,41 +58,27 @@ class SocialSimEnv(gym.Env):
             print(f"Gen Error: {e}")
             post_content = "Error generating content."
 
-        # 2. Calculate Reward: The "Judge" (Critic)
-        # We ask Llama 3.2 to rate the post's engagement potential
-        judge_prompt = (
-            f"Act as a critical Senior Social Media Editor. "
-            f"Rate this post on a scale of 0 to 10 for engagement potential. "
-            f"Be STRICT. Penalize generic or boring content. "
-            f"Only give high scores (8+) to truly unique and engaging posts. "
-            f"Post: \"{post_content}\"\n"
-            f"Return ONLY the number (e.g. 7). Do not explain."
-        )
+        # 2. Calculate Reward: Run Social Simulation
+        from backend.ml.simulation_utils import run_social_simulation
         
-        try:
-            # Using Llama 3.1 (8B) for better critical reasoning/grading
-            judge_res = ollama.generate(model="llama3.1", prompt=judge_prompt, options={"num_predict": 5})
-            score_text = judge_res["response"].strip()
-            # Extract number from response (handle potential extra text)
-            import re
-            match = re.search(r'\d+', score_text)
-            reward = float(match.group()) if match else 0.0
-        except Exception:
-            reward = 0.0
-
-        # 3. Update State (Simulating metrics based on the Judge's score)
-        # Higher score = more simulated likes
-        likes = reward * 10 + np.random.normal(0, 5)
-        comments = reward * 2 + np.random.normal(0, 1)
-        likes = max(0, likes)
-        comments = max(0, comments)
+        # Run simulation with 3 random reactors for speed during training
+        sim_result = run_social_simulation(post_content, self.personas, num_reactors=3)
         
-        observation = np.array([likes, comments, reward/10.0, (likes+comments)/100], dtype=np.float32)
+        likes = sim_result["likes"]
+        comments = sim_result["comments"]
+        reward = sim_result["reward"]
+        
+        # 3. Update State
+        observation = np.array([likes, comments, reward/10.0, (likes+comments)/10.0], dtype=np.float32)
         self.last_observation = observation
 
         terminated = self.current_step >= self.max_steps
         truncated = False
-        info = {"post": post_content, "score": reward}
+        info = {
+            "post": post_content, 
+            "score": reward, 
+            "details": sim_result["details"]
+        }
 
         return observation, reward, terminated, truncated, info
 

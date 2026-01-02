@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body, Query
+import random
 from fastapi.middleware.cors import CORSMiddleware
 from backend.simulation import run_local_simulation
 from backend.bots.ollama_bot import OllamaBot
@@ -164,6 +165,160 @@ def like_post(post_id: str):
     post_ref.update({"likes": firestore.Increment(1)})
     
     return {"message": "Post liked", "id": post_id}
+
+
+def _process_bot_interaction(bot_data, post_data, post_ref):
+    bot_name = bot_data["name"]
+    
+    # Check for self-interaction
+    if bot_name == post_data.get("bot"):
+        print(f"[Simulate] {bot_name} skipped (cannot interact with own post)")
+        return {
+            "type": "ignore",
+            "bot": bot_name,
+            "message": f"{bot_name} skipped (own post)"
+        }
+
+    # Initialize Bot
+    ollama_bot = OllamaBot(bot_name, bot_data["model"], bot_data)
+
+    # Decide Action
+    action = ollama_bot.decide_interaction(post_data.get("text", "")) # Returns LIKE, COMMENT, or IGNORE
+    print(f"[Simulate] {bot_name} chose to {action}")
+
+    if action == "LIKE":
+        post_ref.update({"likes": firestore.Increment(1)})
+        return {
+            "type": "like",
+            "bot": bot_name,
+            "message": f"{bot_name} liked the post"
+        }
+    elif action == "COMMENT":
+        reply = ollama_bot.reply(post_data.get("text", ""))
+        comment = {"bot": bot_name, "text": reply}
+        post_ref.update({
+            "comments": firestore.ArrayUnion([comment])
+        })
+        return {
+            "type": "comment",
+            "bot": bot_name,
+            "comment": reply,
+            "message": f"{bot_name} commented: {reply}"
+        }
+    elif action == "BOTH":
+        # Like
+        post_ref.update({"likes": firestore.Increment(1)})
+        # Comment
+        reply = ollama_bot.reply(post_data.get("text", ""))
+        comment = {"bot": bot_name, "text": reply}
+        post_ref.update({
+            "comments": firestore.ArrayUnion([comment])
+        })
+        return {
+            "type": "both",
+            "bot": bot_name,
+            "comment": reply,
+            "message": f"{bot_name} liked & commented: {reply}"
+        }
+    else:
+        # Ignore
+        return {
+            "type": "ignore",
+            "bot": bot_name,
+            "message": f"{bot_name} ignored the post"
+        }
+
+@app.post("/posts/{post_id}/simulate_interaction")
+def simulate_post_interaction(post_id: str, mode: str = Query("single")):
+    # 1. Fetch Post
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    post_data = snapshot.to_dict()
+    
+    # 2. Load Personas
+    with open("backend/bots/personas.json") as f:
+        bots = json.load(f)
+    
+    if mode == "all":
+        results = []
+        likes_added = 0
+        comments_added = 0
+        ignored = 0
+        
+        print(f"\n--- Batch Simulation Start ({len(bots)} bots) ---")
+        for i, bot_data in enumerate(bots):
+            print(f"Processing bot {i+1}/{len(bots)}: {bot_data['name']}")
+            res = _process_bot_interaction(bot_data, post_data, post_ref)
+            results.append(res)
+            if res["type"] == "like": likes_added += 1
+            elif res["type"] == "comment": comments_added += 1
+            else: ignored += 1
+            
+        return {
+            "type": "batch",
+            "message": f"Simulated {len(bots)} bots: {likes_added} Likes, {comments_added} Comments, {ignored} Ignored.",
+            "results": results
+        }
+    
+    else:
+        # Single Random Bot
+        bot_data = random.choice(bots)
+        return _process_bot_interaction(bot_data, post_data, post_ref)
+
+@app.post("/simulation/run_all")
+def run_global_simulation():
+    # 1. Fetch All Posts
+    posts_ref = db.collection("posts").order_by("timestamp", direction=firestore.Query.DESCENDING)
+    posts_docs = list(posts_ref.stream())
+    
+    # 2. Fetch All Bots
+    with open("backend/bots/personas.json") as f:
+        bots = json.load(f)
+        
+    print(f"\n🚀 STARTING GLOBAL SIMULATION: {len(posts_docs)} Posts x {len(bots)} Bots 🚀")
+    
+    total_interactions = 0
+    likes = 0
+    comments = 0
+    ignored = 0
+    
+    for i, p_doc in enumerate(posts_docs):
+        p_data = p_doc.to_dict()
+        p_data["id"] = p_doc.id
+        # We need p_ref for updates
+        p_ref = db.collection("posts").document(p_doc.id)
+        
+        print(f"\n--- Post {i+1}/{len(posts_docs)}: {p_doc.id} ---")
+        
+        for j, bot_data in enumerate(bots):
+            print(f"Post {i+1}/{len(posts_docs)} | Bot {j+1}/{len(bots)} ({bot_data['name']})... ", end="", flush=True)
+            res = _process_bot_interaction(bot_data, p_data, p_ref)
+            
+            # _process_bot_interaction handles skip logic and prints, but prints newline.
+            # Let's just aggregate stats.
+            if res["type"] in ["like", "both"]: likes += 1
+            if res["type"] in ["comment", "both"]: comments += 1
+            if res["type"] == "ignore": ignored += 1
+            
+            print(f" -> {res['type'].upper()}")
+            total_interactions += 1
+            
+    print(f"\n✅ GLOBAL SIMULATION COMPLETE")
+    print(f"Total Checks: {total_interactions}")
+    print(f"Likes: {likes}, Comments: {comments}, Ignored: {ignored}")
+    
+    return {
+        "message": "Global simulation complete",
+        "stats": {
+            "likes": likes,
+            "comments": comments,
+            "ignored": ignored,
+            "total_checks": total_interactions
+        }
+    }
 
 
 # ---------------- ML Endpoints ----------------

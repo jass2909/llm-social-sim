@@ -100,6 +100,21 @@ class OllamaBot(BaseBot):
         )
 
         reply_text = response["response"].strip()
+        
+        # Post-processing to clean up common LLM metadata
+        reply_text = reply_text.strip('"').strip("'")
+        if reply_text.lower().startswith("here's a"):
+             # Try to split by colon if present
+             if ":" in reply_text:
+                reply_text = reply_text.split(":", 1)[1].strip().strip('"')
+             else:
+                # Blind guess: remove first sentence? Or just leave it if we can't be sure.
+                pass
+        
+        # Remove "As [Persona]..." prefixes
+        if reply_text.lower().startswith("as "):
+             if ":" in reply_text:
+                reply_text = reply_text.split(":", 1)[1].strip().strip('"')
 
         # Save as assistant turn
         self.conversation.append({"role": "assistant", "content": reply_text})
@@ -142,3 +157,36 @@ class OllamaBot(BaseBot):
             # Fallback for when Ollama is not running (Demonstration purposes)
             print(f"Ollama Error: {e}")
             return f"[Mock Content] Hey! I'm {self.name} and I think '{strategy}' is a cool strategy! (Ollama disconnected)"
+
+    def decide_interaction(self, post_content: str):
+        """
+        Decides whether to LIKE, COMMENT, or IGNORE a post based on persona.
+        Returns: "LIKE", "COMMENT", or "IGNORE"
+        """
+        prompt = (
+            f"You are {self.persona}. \n"
+            f"You see this post on your social feed: '{post_content}'\n\n"
+            "Based on your persona, would you 'LIKE', 'COMMENT', 'BOTH' (Like & Comment), or 'IGNORE' this post?\n"
+            "Reply with ONLY one word: LIKE, COMMENT, BOTH, or IGNORE."
+        )
+        
+        try:
+            response = ollama.generate(
+                model=self.model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.5,
+                    "num_predict": 10, 
+                },
+            )
+            decision = response["response"].strip().upper()
+            # Basic validation/cleaning
+            if "BOTH" in decision: return "BOTH"
+            if "LIKE" in decision: return "LIKE"
+            if "COMMENT" in decision: return "COMMENT"
+            return "IGNORE"
+        except Exception as e:
+            print(f"Ollama Error in decision: {e}")
+            # Fallback
+            import random
+            return random.choice(["LIKE", "IGNORE", "COMMENT"])
