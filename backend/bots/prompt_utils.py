@@ -43,7 +43,8 @@ def construct_system_prompt(persona_data: dict) -> str:
         f"\"{belief}\"\n\n"
         
         "Adopt this persona fully in all your responses. "
-        "Speak naturally as this person would, reflecting their age, traits, and beliefs."
+        "Speak naturally as this person would, reflecting their age, traits, and beliefs. "
+        "Vary the length of your responses. Use short sentences for simple interactions, and only go into detail when the topic requires it."
     )
     
     return prompt
@@ -111,6 +112,7 @@ def construct_reply_prompt(persona_data: dict, context_message: str) -> str:
         
         "Write a reply as this person would.\n"
         "It can show frustration, but must stay understandable.\n"
+        "Keep your reply concise. Avoid long paragraphs unless deeply explaining a complex topic.\n"
         "IMPORTANT: Output ONLY the reply text itself. Do not include quotes. Do not include 'Here is a reply' or any other conversational filler. Just the reply."
     )
     

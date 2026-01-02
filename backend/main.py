@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Body, Query
 import random
+import uuid
+from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from backend.simulation import run_local_simulation
 from backend.bots.ollama_bot import OllamaBot
@@ -65,6 +67,19 @@ def create_post(post: PostInput):
         "comments": [],
         "timestamp": firestore.SERVER_TIMESTAMP,
     }
+    # Save to Memory
+    with open("backend/bots/personas.json") as f:
+        bots = json.load(f)
+    bot_data = next((b for b in bots if b["name"] == post.bot), None)
+    
+    if bot_data:
+        try:
+            ollama_bot = OllamaBot(post.bot, bot_data["model"], bot_data)
+            ollama_bot.remember(post.text, metadata={"type": "post", "source": "manual"})
+            print(f"[Memory] Saved manual post for {post.bot}")
+        except Exception as e:
+            print(f"[Memory] Failed to save manual post: {e}")
+
     db.collection("posts").add(doc)
     return {"message": "Post created"}
 
@@ -116,11 +131,19 @@ def reply_to_post(body: ReplyInput):
     generated_reply = ollama_bot.reply(original_text)
 
     # Append reply to comments in Firestore
+    new_comment_id = str(uuid.uuid4())
+    new_comment = {
+        "id": new_comment_id,
+        "bot": matching["name"],
+        "text": generated_reply,
+        "replies": []
+    }
+    
     post_ref.update({
-        "comments": firestore.ArrayUnion([{"bot": matching["name"], "text": generated_reply}])
+        "comments": firestore.ArrayUnion([new_comment])
     })
 
-    return {"message": "Reply added", "bot": matching["name"], "reply": generated_reply}
+    return {"message": "Reply added", "bot": matching["name"], "reply": generated_reply, "comment_id": new_comment_id}
 
 class DeleteCommentInput(BaseModel):
     postId: str
@@ -147,7 +170,117 @@ def delete_comment(body: DeleteCommentInput):
     post_ref.update({"comments": comments})
 
     return {"message": "Comment deleted"}
-    return {"message": "Comment deleted"}
+
+class CommentReplyInput(BaseModel):
+    bot: str
+    text: str
+
+@app.post("/posts/{post_id}/comments/{comment_id}/reply")
+def reply_to_comment(post_id: str, comment_id: str, body: CommentReplyInput):
+    # Fetch Post
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    if not snapshot.exists: raise HTTPException(404, detail="Post not found")
+    data = snapshot.to_dict()
+    comments = data.get("comments", [])
+    
+    # Find comment
+    target_index = -1
+    for i, c in enumerate(comments):
+        # Handle cases where existing comments might not have IDs
+        if c.get("id") == comment_id:
+            target_index = i
+            break
+            
+    if target_index == -1:
+         raise HTTPException(404, detail="Comment not found")
+         
+    # Add reply
+    reply_obj = {
+        "bot": body.bot,
+        "text": body.text,
+        "timestamp": str(datetime.now())
+    }
+    
+    if "replies" not in comments[target_index]:
+        comments[target_index]["replies"] = []
+    
+    comments[target_index]["replies"].append(reply_obj)
+    
+    post_ref.update({"comments": comments})
+    
+    return {"message": "Reply added", "reply": reply_obj}
+
+
+@app.post("/posts/{post_id}/owner_reply")
+def owner_reply_trigger(post_id: str):
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    if not snapshot.exists: raise HTTPException(404, detail="Post not found")
+    data = snapshot.to_dict()
+    
+    owner_name = data.get("bot")
+    post_text = data.get("text")
+    comments = data.get("comments", [])
+    
+    # Load Owner Persona
+    with open("backend/bots/personas.json") as f:
+        bots = json.load(f)
+    owner = next((b for b in bots if b["name"] == owner_name), None)
+    if not owner:
+        raise HTTPException(404, detail=f"Owner bot {owner_name} not found")
+        
+    ollama_bot = OllamaBot(owner_name, owner["model"], owner)
+    
+    replied_count = 0
+    updated = False
+    
+    actions_taken = []
+
+    for c in comments:
+        if "replies" not in c: c["replies"] = []
+        
+        # Check if owner already replied
+        if any(r.get("bot") == owner_name for r in c["replies"]):
+            continue
+            
+        # Don't reply to self
+        if c.get("bot") == owner_name:
+            continue
+            
+        # Decide
+        should_reply, reason = ollama_bot.decide_reply_to_comment(c.get("text", ""), post_text)
+        print(f"Owner {owner_name} logic: {c.get('bot')} -> Reply? {should_reply} (Reason: {reason})")
+        
+        actions_taken.append({
+            "comment_id": c.get("id"),
+            "comment_bot": c.get("bot"),
+            "reply": should_reply,
+            "reason": reason
+        })
+        
+        if should_reply:
+            reply_text = ollama_bot.generate_reply_to_comment(c.get("text", ""), post_text)
+            
+            c["replies"].append({
+                "bot": owner_name,
+                "text": reply_text,
+                "timestamp": str(datetime.now())
+            })
+            replied_count += 1
+            updated = True
+            
+    if updated:
+        post_ref.update({"comments": comments})
+        
+    return {
+        "message": "Owner reply cycle complete", 
+        "replied_count": replied_count, 
+        "owner": owner_name, 
+        "comments": comments,
+        "actions": actions_taken
+    }
+
 
 
 @app.post("/posts/{post_id}/like")
@@ -179,49 +312,79 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
     ollama_bot = OllamaBot(bot_name, bot_data["model"], bot_data)
 
     # Decide Action
-    action = ollama_bot.decide_interaction(post_data.get("text", "")) # Returns LIKE, COMMENT, or IGNORE
-    print(f"[Simulate] {bot_name} chose to {action}")
+    action, reason = ollama_bot.decide_interaction(post_data.get("text", "")) # Returns LIKE, COMMENT, or IGNORE
+    print(f"[Simulate] {bot_name} chose to {action} (Reason: {reason})")
 
     if action == "LIKE":
         post_ref.update({"likes": firestore.Increment(1)})
+        
+        # Save Memory
+        ollama_bot.remember(
+            f"I liked a post: '{post_data.get('text', '')[:50]}...'", 
+            metadata={"type": "interaction", "action": "LIKE", "reason": reason}
+        )
+
         return {
             "type": "like",
             "bot": bot_name,
-            "message": f"{bot_name} liked the post"
+            "reason": reason,
+            "message": f"{bot_name} liked the post. Reason: {reason}"
         }
     elif action == "COMMENT":
         reply = ollama_bot.reply(post_data.get("text", ""))
-        comment = {"bot": bot_name, "text": reply}
+        comment_id = str(uuid.uuid4())
+        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
         post_ref.update({
             "comments": firestore.ArrayUnion([comment])
         })
+        
+        # Save Memory (reply() handles conversation memory, but we want to capture the specific interaction context too)
+        ollama_bot.remember(
+            f"I commented on a post: '{post_data.get('text', '')[:50]}...' My comment: '{reply}'", 
+            metadata={"type": "interaction", "action": "COMMENT", "reason": reason}
+        )
+
         return {
             "type": "comment",
             "bot": bot_name,
             "comment": reply,
-            "message": f"{bot_name} commented: {reply}"
+            "comment_id": comment_id,
+            "reason": reason,
+            "message": f"{bot_name} commented: {reply}. Reason: {reason}"
         }
     elif action == "BOTH":
         # Like
         post_ref.update({"likes": firestore.Increment(1)})
         # Comment
         reply = ollama_bot.reply(post_data.get("text", ""))
-        comment = {"bot": bot_name, "text": reply}
+        comment_id = str(uuid.uuid4())
+        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
         post_ref.update({
             "comments": firestore.ArrayUnion([comment])
         })
+        
+        # Save Memory
+        ollama_bot.remember(
+            f"I liked and commented on a post: '{post_data.get('text', '')[:50]}...' My comment: '{reply}'", 
+            metadata={"type": "interaction", "action": "BOTH", "reason": reason}
+        )
+        
         return {
             "type": "both",
             "bot": bot_name,
             "comment": reply,
-            "message": f"{bot_name} liked & commented: {reply}"
+            "comment_id": comment_id,
+            "reason": reason,
+            "message": f"{bot_name} liked & commented: {reply}. Reason: {reason}"
         }
+
     else:
         # Ignore
         return {
             "type": "ignore",
             "bot": bot_name,
-            "message": f"{bot_name} ignored the post"
+            "reason": reason,
+            "message": f"{bot_name} ignored the post. Reason: {reason}"
         }
 
 @app.post("/posts/{post_id}/simulate_interaction")

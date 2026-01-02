@@ -58,7 +58,8 @@ class OllamaBot(BaseBot):
                 f"You are {self.persona}. "
                 "Respond naturally and emotionally, like a real person in a conversation. "
                 "Avoid repeating who you are or summarizing too formally. "
-                "Use empathy, casual phrasing, and a bit of spontaneity.\n\n"
+                "Use empathy, casual phrasing, and a bit of spontaneity. "
+                "Keep your response concise and avoid long paragraphs unless necessary.\n\n"
                 f"RELEVANT PAST MEMORIES/CONTEXT:\n{context_str}\n\n"
             )
 
@@ -72,6 +73,7 @@ class OllamaBot(BaseBot):
         top_k=40
         repeat_penalty=1.1
         max_tokens=150
+
 
         response = ollama.generate(
             model=self.model,
@@ -117,14 +119,31 @@ class OllamaBot(BaseBot):
         """
         Generates a new post based on a specific strategy (Topic/Tone).
         """
+        # Strategy Definitions
+        STRATEGY_DEFINITIONS = {
+            "Friendly-Tech": "Write a friendly, optimistic post about technology, gadgets, or the future of tech.",
+            "Friendly-Lifestyle": "Write a casual, positive post about daily life, hobbies, or community.",
+            "Professional-Tech": "Write a professional, informative post about the tech industry, software development, or AI trends.",
+            "Professional-Lifestyle": "Write a professional post about productivity, career growth, or work culture.",
+            "Controversial-Opinion": "Share a strong, potentially controversial opinion on a topic you care about.",
+            "Humorous-Meme": "Write a funny, relatable, or sarcastic comment/observation about modern life.",
+            "Educational-Tutorial": "Share a useful tip, fact, or short 'how-to' related to your interests.",
+            "Inspirational-Story": "Share an encouraging thought or lesson learned from your experience."
+        }
+        
+        target_topic = STRATEGY_DEFINITIONS.get(strategy, strategy)
+
         # Retrieve examples of past posts with similar strategy/content
         relevant_docs, _ = self.vector_store.search_memory(strategy, n_results=3)
         context_str = "\n".join([f"- {doc}" for doc in relevant_docs]) if relevant_docs else "No relevant past posts."
 
         prompt = (
-            f"You are {self.persona}. "
-            f"Write a social media post that follows this strategy: {strategy}. "
-            "Keep it engaging, authentic to your persona, and under 280 characters.\n\n"
+            f"You are {self.persona}. \n\n"
+            f"TASK: {target_topic}\n\n"
+            "GUIDELINES:\n"
+            "1. TOPIC: You MUST write about the specified topic (e.g., if asked for Tech, write about Tech).\n"
+            "2. PERSONA: Apply your persona's voice, opinions, and style to this topic.\n"
+            "3. LENGTH: Keep it engaging and under 280 characters.\n\n"
             f"YOUR PAST POSTS ON SIMILAR TOPICS (for style reference):\n{context_str}\n"
         )
         
@@ -144,18 +163,20 @@ class OllamaBot(BaseBot):
         except Exception as e:
             # Fallback for when Ollama is not running (Demonstration purposes)
             print(f"Ollama Error: {e}")
-            return f"[Mock Content] Hey! I'm {self.name} and I think '{strategy}' is a cool strategy! (Ollama disconnected)"
+            return f"[Mock Content] Hey! I'm {self.name} and here is a post about {strategy}! (Ollama disconnected)"
 
     def decide_interaction(self, post_content: str):
         """
         Decides whether to LIKE, COMMENT, or IGNORE a post based on persona.
-        Returns: "LIKE", "COMMENT", or "IGNORE"
+        Returns: ("LIKE", "reason") or ("COMMENT", "reason") etc.
         """
         prompt = (
             f"You are {self.persona}. \n"
             f"You see this post on your social feed: '{post_content}'\n\n"
             "Based on your persona, would you 'LIKE', 'COMMENT', 'BOTH' (Like & Comment), or 'IGNORE' this post?\n"
-            "Reply with ONLY one word: LIKE, COMMENT, BOTH, or IGNORE."
+            "Reply in this format strictly: DECISION | SHORT_REASON\n"
+            "Example: LIKE | It's funny and relates to tech.\n"
+            "Example: IGNORE | Not interested in politics."
         )
         
         try:
@@ -164,17 +185,70 @@ class OllamaBot(BaseBot):
                 prompt=prompt,
                 options={
                     "temperature": 0.5,
-                    "num_predict": 10, 
+                    "num_predict": 40, 
                 },
             )
-            decision = response["response"].strip().upper()
-            # Basic validation/cleaning
-            if "BOTH" in decision: return "BOTH"
-            if "LIKE" in decision: return "LIKE"
-            if "COMMENT" in decision: return "COMMENT"
-            return "IGNORE"
+            raw = response["response"].strip()
+            
+            # Parse
+            if "|" in raw:
+                parts = raw.split("|", 1)
+                decision = parts[0].strip().upper()
+                reason = parts[1].strip()
+            else:
+                decision = raw.split()[0].upper()
+                reason = raw
+
+            # Basic validation
+            final_decision = "IGNORE"
+            if "BOTH" in decision: final_decision = "BOTH"
+            elif "LIKE" in decision: final_decision = "LIKE"
+            elif "COMMENT" in decision: final_decision = "COMMENT"
+            
+            return final_decision, reason
+            
         except Exception as e:
             print(f"Ollama Error in decision: {e}")
-            # Fallback
             import random
-            return random.choice(["LIKE", "IGNORE", "COMMENT"])
+            return random.choice(["LIKE", "IGNORE", "COMMENT"]), "Random fallback due to error"
+
+    def decide_reply_to_comment(self, comment_text: str, post_context: str):
+        """
+        Decides whether to reply to a specific comment on their own post.
+        Returns: (True/False, reason)
+        """
+        prompt = (
+            f"You are {self.persona}. \n"
+            f"You posted: '{post_context}'\n"
+            f"Someone commented: '{comment_text}'\n\n"
+            "Based on your persona, do you want to reply to this comment?\n"
+            "Reply in this format strictly: YES/NO | SHORT_REASON"
+        )
+        
+        try:
+            response = ollama.generate(
+                model=self.model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.5,
+                    "num_predict": 40, 
+                },
+            )
+            raw = response["response"].strip()
+            
+            if "|" in raw:
+                parts = raw.split("|", 1)
+                decision_part = parts[0].strip().upper()
+                reason = parts[1].strip()
+            else:
+                decision_part = raw.split()[0].upper()
+                reason = raw
+
+            return "YES" in decision_part, reason
+        except Exception as e:
+            print(f"Ollama Error in reply decision: {e}")
+            return False, f"Error: {e}"
+
+    def generate_reply_to_comment(self, comment_text: str, post_context: str):
+        context = f"Context: I posted '{post_context}' and someone commented '{comment_text}'. Write a reply to the comment."
+        return self.reply(context)
