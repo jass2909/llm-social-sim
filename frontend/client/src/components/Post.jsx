@@ -27,17 +27,17 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
 
   const handleSimulate = async () => {
     try {
-        const res = await axios.post(`http://localhost:8000/posts/${id}/simulate_interaction`);
-        console.log(res.data);
-        if (res.data.type === "like") {
-            setLikes(likes + 1);
-        } else if (res.data.type === "comment") {
-            // Support both string and object based comments (fixing potential bug)
-            const newComment = { bot: res.data.bot, text: res.data.comment };
-            setComments([...comments, newComment]);
-        }
+      const res = await axios.post(`http://localhost:8000/posts/${id}/simulate_interaction`);
+      console.log(res.data);
+      if (res.data.type === "like") {
+        setLikes(likes + 1);
+      } else if (res.data.type === "comment") {
+        // Support both string and object based comments (fixing potential bug)
+        const newComment = { bot: res.data.bot, text: res.data.comment };
+        setComments([...comments, newComment]);
+      }
     } catch (error) {
-        console.error("Simulation failed:", error);
+      console.error("Simulation failed:", error);
     }
   };
 
@@ -106,12 +106,12 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
               </div>
             </button>
             <button
-          onClick={handleSimulate}
-          className="bg-purple-600 text-white px-3 py-1 rounded"
-        >
-          ⚡️ Simulate
-        </button>
-      </div>
+              onClick={handleSimulate}
+              className="bg-purple-600 text-white px-3 py-1 rounded"
+            >
+              ⚡️ Simulate
+            </button>
+          </div>
 
           {/* Comments Section */}
           {showComments && (
@@ -133,30 +133,30 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
                 </button>
               </div>
 
-      {/* Comments */}
-      <div className="mt-3">
-        {comments.map((c, i) => (
-          <div key={i} className="p-2 bg-gray-100 rounded mb-1">
-            {typeof c === 'object' ? (
-                <span><b>{c.bot}:</b> {c.text}</span>
-            ) : (
-                c
-            )}
-          </div>
-        ))}
+              {/* Comments List */}
               <div className="space-y-3">
-                {comments.map((c, i) => (
-                  <div key={i} className="flex gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0" />
-                    <div>
-                      <div className="flex gap-2 items-center">
-                        <span className="font-bold text-sm">User</span>
-                        <span className="text-gray-500 text-xs">@user</span>
+                {comments.map((c, i) => {
+                  const isObj = typeof c === 'object';
+                  const author = isObj ? c.bot : "User";
+                  const handle = isObj ? `@${c.bot.toLowerCase().replace(/\s+/g, '')}` : "@user";
+                  const content = isObj ? c.text : c;
+                  const avatarChar = author[0].toUpperCase();
+
+                  return (
+                    <div key={i} className="flex gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-gray-500">
+                        {avatarChar}
                       </div>
-                      <p className="text-sm">{c}</p>
+                      <div>
+                        <div className="flex gap-2 items-center">
+                          <span className="font-bold text-sm">{author}</span>
+                          <span className="text-gray-500 text-xs">{handle}</span>
+                        </div>
+                        <p className="text-sm">{content}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
