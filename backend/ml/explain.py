@@ -6,6 +6,9 @@ from stable_baselines3 import DQN
 
 def explain_agent_decision(observation):
     """
+    # [ML PIPELINE STEP 5] ERROR ANALYSIS & INTERPRETABILITY
+    # We use SHAP (Shapley Additive Explanations) to "debug" the Black Box model.
+    # If the agent makes a "wrong" decision (low reward), this tool tells us which feature misled it.
     Explain the agent's decision using SHAP (KernelExplainer as DQN is a black box).
     """
     path = "backend/ml/models/social_sim_dqn.zip"

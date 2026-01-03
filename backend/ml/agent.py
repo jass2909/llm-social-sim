@@ -22,6 +22,9 @@ def train_agent(status_queue=None, n_steps=500):
     env = SocialSimEnv()
     
     # Initialize DQN Agent
+    # [ML PIPELINE STEP 3] MODEL SELECTION
+    # We select Deep Q-Network (DQN) because the action space is discrete (8 strategies).
+    # We use "MlpPolicy" (Multi-Layer Perceptron) because the observation state is a simple 1D vector.
     model = DQN("MlpPolicy", env, verbose=1)
     
     # Train the agent
@@ -29,6 +32,9 @@ def train_agent(status_queue=None, n_steps=500):
         status_queue.put(f"Starting training loop ({n_steps} steps)...\n")
         
     callback = ProgressCallback(queue=status_queue)
+    # [ML PIPELINE STEP 4] MODEL TRAINING & OPTIMIZATION
+    # The agent interacts with the Environment (SocialSimEnv), collects rewards (likes/comments),
+    # and optimizes its Q-Network weights using Gradient Descent (Adam Optimizer) to minimize the Bellman Error.
     model.learn(total_timesteps=n_steps, callback=callback)
     
     if status_queue:
@@ -45,6 +51,10 @@ def get_agent_action(observation):
     path = "backend/ml/models/social_sim_dqn.zip"
     if os.path.exists(path):
         model = DQN.load(path)
+        
+        # [ML PIPELINE STEP 6] MODEL EVALUATION (INFERENCE)
+        # We test the model by running it in "deterministic" mode (no random exploration).
+        # It predicts the BEST action based on current observation to maximize expected reward.
         action, _states = model.predict(observation, deterministic=True)
         return int(action)
     return 0 # Default action

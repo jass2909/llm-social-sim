@@ -403,14 +403,18 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
         for doc in docs:
             p = doc.to_dict()
             total_likes += p.get("likes", 0)
-            # comments is a list, take length
-            total_comments += len(p.get("comments", []))
+            # [ML PIPELINE STEP 1] DATA SELECTION
+            # Selecting relevant historical data (Last 10 posts) from Firestore
+            comments_len = len(p.get("comments", []))
+            total_comments += comments_len
             count += 1
             
         if count > 0:
             avg_likes = total_likes / count
             avg_comments = total_comments / count
-            # Interaction rate = (likes + comments) / 100 (normalized roughly)
+            
+            # [ML PIPELINE STEP 2] STATISTICAL ANALYSIS / PREPROCESSING
+            # Calculating aggregated metrics (rolling averages) and normalizing interaction rate
             interaction = (avg_likes + avg_comments) / 20.0 
         else:
             avg_likes = 0

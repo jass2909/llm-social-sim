@@ -45,15 +45,20 @@ class OllamaBot(BaseBot):
         self.vector_store.add_memory(text, metadata)
 
     def reply(self, message: str):
+        # [ML PIPELINE STEP 1] INPUT PROCESSING
+        # Capture user input and append to short-term conversation history
         # Preserve history
         self.conversation.append({"role": "user", "content": message})
         
         # Build full prompt with persona + memory
         
-        # Retrieve relevant past context
+        # [ML PIPELINE STEP 2] RETRIEVAL (RAG)
+        # Query Vector Store for relevant long-term memories to augment context
         relevant_docs, _ = self.vector_store.search_memory(message, n_results=3)
         context_str = "\n".join([f"- {doc}" for doc in relevant_docs]) if relevant_docs else "No relevant past memories."
 
+        # [ML PIPELINE STEP 3] PROMPT ENGINEERING
+        # Construct the final prompt by combining Persona, Memory, and History
         # Build prompt: Use new format if structured data is available
         if getattr(self, "persona_data", None):
             full_context = construct_reply_prompt(self.persona_data, message)
@@ -85,6 +90,8 @@ class OllamaBot(BaseBot):
         repeat_penalty=1.1
         max_tokens=150
 
+        # [ML PIPELINE STEP 4] INFERENCE
+        # Send the constructed context to the LLM (Ollama) for generation
         response = ollama.generate(
             model=self.model,
             prompt=full_context,
@@ -101,6 +108,8 @@ class OllamaBot(BaseBot):
 
         reply_text = response["response"].strip()
         
+        # [ML PIPELINE STEP 5] POST-PROCESSING
+        # Clean up the generated text (remove quotes, prefixes, etc.)
         # Post-processing to clean up common LLM metadata
         reply_text = reply_text.strip('"').strip("'")
         if reply_text.lower().startswith("here's a"):
@@ -120,6 +129,8 @@ class OllamaBot(BaseBot):
         self.conversation.append({"role": "assistant", "content": reply_text})
         self._save_memory()
         
+        # [ML PIPELINE STEP 6] MEMORY UPDATE
+        # Save the interaction to both JSON (short-term) and Vector DB (long-term)
         # Save to Vector DB
         self.remember(f"User: {message}\nMe: {reply_text}", metadata={"type": "conversation"})
 
