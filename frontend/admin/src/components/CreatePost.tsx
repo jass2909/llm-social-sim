@@ -16,6 +16,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
   // Modal State
   const [showModal, setShowModal] = useState(false)
   const [selectedBotForGen, setSelectedBotForGen] = useState("")
+  const [topic, setTopic] = useState("")
 
   useEffect(() => {
     const fetchBots = async () => {
@@ -63,6 +64,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
     setSuccess("")
     setShowModal(true)
     setSelectedBotForGen("")
+    setTopic("")
   }
 
   // The actual generation logic
@@ -93,7 +95,8 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
         likes: -1,
         comments: -1,
         sentiment: 0.9,
-        interaction: 0.8
+        interaction: 0.8,
+        topic: topic // Pass the optional topic
       })
       
       const { generated_content, bot: generatedBot } = genRes.data
@@ -169,6 +172,18 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-fade-in border border-gray-100">
             <h3 className="text-lg font-bold mb-4 text-center text-gray-800">Choose Generation Mode</h3>
             
+            <div className="mb-4">
+               <label className="text-sm font-medium text-gray-600 block mb-1">Topic (Optional):</label>
+               <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="e.g., The Future of AI, Best Coffee Spots..."
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-purple-200 outline-none text-sm"
+               />
+               <p className="text-xs text-gray-400 mt-1">Leave empty to let the ML Agent decide.</p>
+            </div>
+
             <div className="flex flex-col gap-4">
               {/* Option 1: Random */}
               <button

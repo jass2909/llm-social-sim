@@ -131,7 +131,7 @@ class OllamaBot(BaseBot):
             "Inspirational-Story": "Share an encouraging thought or lesson learned from your experience."
         }
         
-        target_topic = STRATEGY_DEFINITIONS.get(strategy, strategy)
+        target_topic = STRATEGY_DEFINITIONS.get(strategy, f"Write a post about {strategy}")
 
         # Retrieve examples of past posts with similar strategy/content
         relevant_docs, _ = self.vector_store.search_memory(strategy, n_results=3)
@@ -141,7 +141,7 @@ class OllamaBot(BaseBot):
             f"You are {self.persona}. \n\n"
             f"TASK: {target_topic}\n\n"
             "GUIDELINES:\n"
-            "1. TOPIC: You MUST write about the specified topic (e.g., if asked for Tech, write about Tech).\n"
+            "1. TOPIC: You MUST write about the specified topic (or apply the strategy).\n"
             "2. PERSONA: Apply your persona's voice, opinions, and style to this topic.\n"
             "3. LENGTH: Keep it engaging and under 280 characters.\n\n"
             f"YOUR PAST POSTS ON SIMILAR TOPICS (for style reference):\n{context_str}\n"

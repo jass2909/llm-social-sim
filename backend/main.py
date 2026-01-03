@@ -296,6 +296,19 @@ def like_post(post_id: str):
     return {"message": "Post liked", "id": post_id}
 
 
+@app.delete("/posts/{post_id}")
+def delete_post(post_id: str):
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Post not found")
+        
+    post_ref.delete()
+    
+    return {"message": "Post deleted", "id": post_id}
+
+
 def _process_bot_interaction(bot_data, post_data, post_ref):
     bot_name = bot_data["name"]
     
@@ -517,6 +530,7 @@ class PredictInput(BaseModel):
     comments: int
     sentiment: float
     interaction: float
+    topic: str = None  # Optional topic override
 
 @app.post("/ml/predict")
 def predict_best_action(data: PredictInput):
@@ -574,54 +588,62 @@ def explain_text_interaction(data: ExplainTextInput):
 
 @app.post("/ml/generate")
 def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
-    # 1. Get Agent Strategy
-    import numpy as np
+    # 1. Determine Strategy (Agent vs Topic Override)
+    strategy = "General"
     
-    # If using "Auto" mode (flagged by -1), calculate real stats from Firestore
-    if data.likes == -1:
-        # Fetch last 10 posts to get average performance
-        posts_ref = db.collection("posts").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10)
-        docs = posts_ref.stream()
-        
-        total_likes = 0
-        total_comments = 0
-        count = 0
-        
-        for doc in docs:
-            p = doc.to_dict()
-            total_likes += p.get("likes", 0)
-            # comments is a list, take length
-            total_comments += len(p.get("comments", []))
-            count += 1
-            
-        if count > 0:
-            avg_likes = total_likes / count
-            avg_comments = total_comments / count
-            # Interaction rate = (likes + comments) / 100 (normalized roughly)
-            interaction = (avg_likes + avg_comments) / 20.0 
-        else:
-            avg_likes = 0
-            avg_comments = 0
-            interaction = 0.0
-
-        obs = np.array([avg_likes, avg_comments, 0.8, interaction])
-        print(f"Using Real Stats: Likes={avg_likes}, Comments={avg_comments}")
+    if data.topic and data.topic.strip():
+        # Override with manual topic
+        strategy = data.topic.strip()
+        print(f"\n[DEBUG] Generation Context: Manual Topic Override -> {strategy}")
     else:
-        obs = np.array([data.likes, data.comments, data.sentiment, data.interaction])
-    
-    print(f"\n[DEBUG] Generation Context:")
-    print(f"  > Metrics: Likes={obs[0]:.1f}, Comments={obs[1]:.1f}, Sentiment={obs[2]:.1f}, Rate={obs[3]:.2f}")
+        # Use ML Agent
+        import numpy as np
         
-    action_id = get_agent_action(obs)
-    
-    strategies = [
-        "Friendly-Tech", "Friendly-Lifestyle", 
-        "Professional-Tech", "Professional-Lifestyle",
-        "Controversial-Opinion", "Humorous-Meme",
-        "Educational-Tutorial", "Inspirational-Story"
-    ]
-    strategy = strategies[action_id] if action_id < len(strategies) else "General"
-    print(f"  > Selected Strategy: {strategy} (Action: {action_id})\n")
+        # If using "Auto" mode (flagged by -1), calculate real stats from Firestore
+        if data.likes == -1:
+            # Fetch last 10 posts to get average performance
+            posts_ref = db.collection("posts").order_by("timestamp", direction=firestore.Query.DESCENDING).limit(10)
+            docs = posts_ref.stream()
+            
+            total_likes = 0
+            total_comments = 0
+            count = 0
+            
+            for doc in docs:
+                p = doc.to_dict()
+                total_likes += p.get("likes", 0)
+                # comments is a list, take length
+                total_comments += len(p.get("comments", []))
+                count += 1
+                
+            if count > 0:
+                avg_likes = total_likes / count
+                avg_comments = total_comments / count
+                # Interaction rate = (likes + comments) / 100 (normalized roughly)
+                interaction = (avg_likes + avg_comments) / 20.0 
+            else:
+                avg_likes = 0
+                avg_comments = 0
+                interaction = 0.0
+
+            obs = np.array([avg_likes, avg_comments, 0.8, interaction])
+            print(f"Using Real Stats: Likes={avg_likes}, Comments={avg_comments}")
+        else:
+            obs = np.array([data.likes, data.comments, data.sentiment, data.interaction])
+        
+        print(f"\n[DEBUG] Generation Context:")
+        print(f"  > Metrics: Likes={obs[0]:.1f}, Comments={obs[1]:.1f}, Sentiment={obs[2]:.1f}, Rate={obs[3]:.2f}")
+            
+        action_id = get_agent_action(obs)
+        
+        strategies = [
+            "Friendly-Tech", "Friendly-Lifestyle", 
+            "Professional-Tech", "Professional-Lifestyle",
+            "Controversial-Opinion", "Humorous-Meme",
+            "Educational-Tutorial", "Inspirational-Story"
+        ]
+        strategy = strategies[action_id] if action_id < len(strategies) else "General"
+        print(f"  > Selected Strategy: {strategy} (Action: {action_id})\n")
     
     # 2. Use Bot to Generate Content
     # Load persona (simple lookup)
@@ -630,6 +652,8 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
     matching = next((b for b in bots if b["name"] == bot), bots[0])
     
     ollama_bot = OllamaBot(matching["name"], matching["model"], matching)
+    
+    # Pass the strategy (which might be the manual topic now)
     post_content = ollama_bot.generate_from_strategy(strategy)
     
     return {

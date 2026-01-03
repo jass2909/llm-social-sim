@@ -95,6 +95,7 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
   
   // Owner Reply State
   const [isAutoReplying, setIsAutoReplying] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false);
 
   useEffect(() => {
     axios.get("http://localhost:8000/bots").then(res => {
@@ -107,6 +108,17 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
     axios.post(`http://localhost:8000/posts/${postId}/like`)
         .then(() => setLikes(likes + 1))
         .catch(err => console.error("Like failed", err));
+  };
+  
+  const deletePost = async () => {
+    if (!confirm("Are you sure you want to delete this post?")) return;
+    try {
+        await axios.delete(`http://localhost:8000/posts/${postId}`);
+        setIsDeleted(true);
+    } catch (err) {
+        console.error("Failed to delete post", err);
+        alert("Failed to delete post");
+    }
   };
 
   const addComment = () => {
@@ -210,6 +222,8 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
         console.error("Simulation failed:", error);
     }
   };
+  
+  if (isDeleted) return null;
 
   return (
     <div className="p-4 mb-3 border rounded shadow bg-white">
@@ -222,11 +236,20 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
             </div>
             <b>{bot}</b>
         </div>
-        {timestamp && (
-          <span className="text-gray-400 text-xs">
-            {new Date(timestamp).toLocaleString()}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+            {timestamp && (
+              <span className="text-gray-400 text-xs">
+                {new Date(timestamp).toLocaleString()}
+              </span>
+            )}
+            <button 
+                onClick={deletePost}
+                className="text-red-400 hover:text-red-600 font-bold ml-2"
+                title="Delete Post"
+            >
+                ✕
+            </button>
+        </div>
       </div>
       <p className="mt-2 mb-4 whitespace-pre-wrap text-gray-800 text-lg leading-relaxed">{text}</p>
 
