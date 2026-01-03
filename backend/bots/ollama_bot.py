@@ -45,10 +45,6 @@ class OllamaBot(BaseBot):
         # Build prompt: Use new format if structured data is available
         if getattr(self, "persona_data", None):
             full_context = construct_reply_prompt(self.persona_data, message)
-            # Append memory content if relevant?
-            # User format doesn't explicitly ask for memory, but it's good practice.
-            # However, user format ends with "Write a reply...", so appending memory after might break flow?
-            # Let's append memory as "Additional Context" before the final instruction.
             if relevant_docs:
                 full_context = full_context.replace("Context:\nAnother user wrote:", 
                     f"Past Memories:\n{context_str}\n\nContext:\nAnother user wrote:")
@@ -83,7 +79,7 @@ class OllamaBot(BaseBot):
                 "top_p": top_p,
                 "top_k": top_k,
                 "repeat_penalty": repeat_penalty,
-                "num_predict": max_tokens,  # correct parameter for generate()
+                "num_predict": max_tokens,  
                 
             },
         
@@ -98,7 +94,6 @@ class OllamaBot(BaseBot):
              if ":" in reply_text:
                 reply_text = reply_text.split(":", 1)[1].strip().strip('"')
              else:
-                # Blind guess: remove first sentence? Or just leave it if we can't be sure.
                 pass
         
         # Remove "As [Persona]..." prefixes

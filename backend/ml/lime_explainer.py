@@ -22,7 +22,6 @@ class LIMEExplainer:
         results = []
         
         # We process each text sample. 
-        # Note: This loop makes LIME slow because we call the LLM for every perturbed sample.
         for text in texts:
             if not self.bot:
                 results.append([0.25, 0.25, 0.25, 0.25])
@@ -84,8 +83,6 @@ class LIMEExplainer:
         self.bot = OllamaBot(bot_name, bot_data["model"], bot_data)
 
         # Run LIME
-        # We reduce num_samples to keep it fast, as each sample is an LLM call!
-        # Warning: This is slow. 20 samples = 20 LLM calls.
         exp = self.explainer.explain_instance(
             post_text, 
             self._predict_proba, 
