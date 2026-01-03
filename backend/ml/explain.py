@@ -32,7 +32,6 @@ def explain_agent_decision(observation):
         return torch.max(q_values, dim=1).values.numpy()
 
     # Use KernelExplainer
-    # Using a small background dataset (zeros) for reference
     background = np.zeros((1, 4)) 
     explainer = shap.KernelExplainer(predict_reward, background)
     

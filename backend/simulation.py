@@ -11,7 +11,7 @@ def run_local_simulation(rounds=5, message=None):
     if not personas:
         return [{"round": 0, "bot": "System", "reply": "No personas found. Please generate data first."}]
 
-    bots = [OllamaBot(p["name"], p["model"], p["persona"]) for p in personas]
+    bots = [OllamaBot(p["name"], p["model"], p) for p in personas]
 
     if message is None:
         message = "How are you?"
@@ -24,8 +24,5 @@ def run_local_simulation(rounds=5, message=None):
         conversation.append({"round": i+1, "bot": current_bot.name, "reply": reply})
         message = reply
         time.sleep(0.2)
-
-    with open("backend/data/logs/conversation.json", "w") as f:
-        json.dump(conversation, f, indent=2)
 
     return conversation

@@ -33,6 +33,7 @@ backend/ml/models/social_sim_dqn/system_info.txt
 backend/ml/models/social_sim_dqn/pytorch_variables.pth
 backend/ml/models/social_sim_dqn.zip
 backend/ml/__pycache__
+backend/scripts/__pycache__
 # Vector DB
 backend/data/chroma/
 adapters/

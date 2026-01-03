@@ -12,8 +12,6 @@ class SocialSimEnv(gym.Env):
     def __init__(self):
         super(SocialSimEnv, self).__init__()
         # Define Action Space:
-        # 0: Friendly-Tech, 1: Friendly-Lifestyle, 2: Professional-Tech, 3: Professional-Lifestyle
-        # 4: Controversial-Opinion, 5: Humorous-Meme, 6: Educational-Tutorial, 7: Inspirational-Story
         self.action_space = spaces.Discrete(8)
         self.strategies = [
             "Friendly-Tech", "Friendly-Lifestyle", 
@@ -23,11 +21,10 @@ class SocialSimEnv(gym.Env):
         ]
 
         # Define Observation Space:
-        # Vector of size 4: [Last Like Count, Last Comment Count, Sentiment Score (0-1), Interaction Rate]
         self.observation_space = spaces.Box(low=0, high=1000, shape=(4,), dtype=np.float32)
 
         self.current_step = 0
-        self.max_steps = 10  # Reduced steps for real-world training (slower)
+        self.max_steps = 10 
         self.last_observation = np.zeros(4)
         
         # Initialize Bot for Generation

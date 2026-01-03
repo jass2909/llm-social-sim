@@ -18,25 +18,13 @@ class OllamaBot(BaseBot):
 
         super().__init__(name, model, persona_prompt)
         self.name = name
-        self.memory_path = os.path.join("backend", "data", "logs", f"memory_{self.name.replace(' ', '_')}.json")
-        self._load_memory()
+        self.conversation = []
         
         # Initialize Vector Store (Long-term memory)
         # Sanitize name for ChromaDB (only allows alphanumerics, underscores, dashes)
         import re
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', self.name.replace(' ', '_').lower())
         self.vector_store = VectorStore(collection_name=safe_name)
-
-    def _load_memory(self):
-        if os.path.exists(self.memory_path):
-            with open(self.memory_path, "r") as f:
-                self.conversation = json.load(f)
-        else:
-            self.conversation = []
-
-    def _save_memory(self):
-        with open(self.memory_path, "w") as f:
-            json.dump(self.conversation, f)
 
     def remember(self, text: str, metadata: dict = None):
         """
@@ -62,10 +50,6 @@ class OllamaBot(BaseBot):
         # Build prompt: Use new format if structured data is available
         if getattr(self, "persona_data", None):
             full_context = construct_reply_prompt(self.persona_data, message)
-            # Append memory content if relevant?
-            # User format doesn't explicitly ask for memory, but it's good practice.
-            # However, user format ends with "Write a reply...", so appending memory after might break flow?
-            # Let's append memory as "Additional Context" before the final instruction.
             if relevant_docs:
                 full_context = full_context.replace("Context:\nAnother user wrote:", 
                     f"Past Memories:\n{context_str}\n\nContext:\nAnother user wrote:")
@@ -75,7 +59,8 @@ class OllamaBot(BaseBot):
                 f"You are {self.persona}. "
                 "Respond naturally and emotionally, like a real person in a conversation. "
                 "Avoid repeating who you are or summarizing too formally. "
-                "Use empathy, casual phrasing, and a bit of spontaneity.\n\n"
+                "Use empathy, casual phrasing, and a bit of spontaneity. "
+                "Keep your response concise and avoid long paragraphs unless necessary.\n\n"
                 f"RELEVANT PAST MEMORIES/CONTEXT:\n{context_str}\n\n"
             )
 
@@ -90,8 +75,7 @@ class OllamaBot(BaseBot):
         repeat_penalty=1.1
         max_tokens=150
 
-        # [ML PIPELINE STEP 4] INFERENCE
-        # Send the constructed context to the LLM (Ollama) for generation
+
         response = ollama.generate(
             model=self.model,
             prompt=full_context,
@@ -100,7 +84,7 @@ class OllamaBot(BaseBot):
                 "top_p": top_p,
                 "top_k": top_k,
                 "repeat_penalty": repeat_penalty,
-                "num_predict": max_tokens,  # correct parameter for generate()
+                "num_predict": max_tokens,  
                 
             },
         
@@ -117,7 +101,6 @@ class OllamaBot(BaseBot):
              if ":" in reply_text:
                 reply_text = reply_text.split(":", 1)[1].strip().strip('"')
              else:
-                # Blind guess: remove first sentence? Or just leave it if we can't be sure.
                 pass
         
         # Remove "As [Persona]..." prefixes
@@ -127,7 +110,7 @@ class OllamaBot(BaseBot):
 
         # Save as assistant turn
         self.conversation.append({"role": "assistant", "content": reply_text})
-        self._save_memory()
+
         
         # [ML PIPELINE STEP 6] MEMORY UPDATE
         # Save the interaction to both JSON (short-term) and Vector DB (long-term)
@@ -140,14 +123,31 @@ class OllamaBot(BaseBot):
         """
         Generates a new post based on a specific strategy (Topic/Tone).
         """
+        # Strategy Definitions
+        STRATEGY_DEFINITIONS = {
+            "Friendly-Tech": "Write a friendly, optimistic post about technology, gadgets, or the future of tech.",
+            "Friendly-Lifestyle": "Write a casual, positive post about daily life, hobbies, or community.",
+            "Professional-Tech": "Write a professional, informative post about the tech industry, software development, or AI trends.",
+            "Professional-Lifestyle": "Write a professional post about productivity, career growth, or work culture.",
+            "Controversial-Opinion": "Share a strong, potentially controversial opinion on a topic you care about.",
+            "Humorous-Meme": "Write a funny, relatable, or sarcastic comment/observation about modern life.",
+            "Educational-Tutorial": "Share a useful tip, fact, or short 'how-to' related to your interests.",
+            "Inspirational-Story": "Share an encouraging thought or lesson learned from your experience."
+        }
+        
+        target_topic = STRATEGY_DEFINITIONS.get(strategy, f"Write a post about {strategy}")
+
         # Retrieve examples of past posts with similar strategy/content
         relevant_docs, _ = self.vector_store.search_memory(strategy, n_results=3)
         context_str = "\n".join([f"- {doc}" for doc in relevant_docs]) if relevant_docs else "No relevant past posts."
 
         prompt = (
-            f"You are {self.persona}. "
-            f"Write a social media post that follows this strategy: {strategy}. "
-            "Keep it engaging, authentic to your persona, and under 280 characters.\n\n"
+            f"You are {self.persona}. \n\n"
+            f"TASK: {target_topic}\n\n"
+            "GUIDELINES:\n"
+            "1. TOPIC: You MUST write about the specified topic (or apply the strategy).\n"
+            "2. PERSONA: Apply your persona's voice, opinions, and style to this topic.\n"
+            "3. LENGTH: Keep it engaging and under 280 characters.\n\n"
             f"YOUR PAST POSTS ON SIMILAR TOPICS (for style reference):\n{context_str}\n"
         )
         
@@ -167,18 +167,20 @@ class OllamaBot(BaseBot):
         except Exception as e:
             # Fallback for when Ollama is not running (Demonstration purposes)
             print(f"Ollama Error: {e}")
-            return f"[Mock Content] Hey! I'm {self.name} and I think '{strategy}' is a cool strategy! (Ollama disconnected)"
+            return f"[Mock Content] Hey! I'm {self.name} and here is a post about {strategy}! (Ollama disconnected)"
 
     def decide_interaction(self, post_content: str):
         """
         Decides whether to LIKE, COMMENT, or IGNORE a post based on persona.
-        Returns: "LIKE", "COMMENT", or "IGNORE"
+        Returns: ("LIKE", "reason") or ("COMMENT", "reason") etc.
         """
         prompt = (
             f"You are {self.persona}. \n"
             f"You see this post on your social feed: '{post_content}'\n\n"
             "Based on your persona, would you 'LIKE', 'COMMENT', 'BOTH' (Like & Comment), or 'IGNORE' this post?\n"
-            "Reply with ONLY one word: LIKE, COMMENT, BOTH, or IGNORE."
+            "Reply in this format strictly: DECISION | SHORT_REASON\n"
+            "Example: LIKE | It's funny and relates to tech.\n"
+            "Example: IGNORE | Not interested in politics."
         )
         
         try:
@@ -187,17 +189,70 @@ class OllamaBot(BaseBot):
                 prompt=prompt,
                 options={
                     "temperature": 0.5,
-                    "num_predict": 10, 
+                    "num_predict": 40, 
                 },
             )
-            decision = response["response"].strip().upper()
-            # Basic validation/cleaning
-            if "BOTH" in decision: return "BOTH"
-            if "LIKE" in decision: return "LIKE"
-            if "COMMENT" in decision: return "COMMENT"
-            return "IGNORE"
+            raw = response["response"].strip()
+            
+            # Parse
+            if "|" in raw:
+                parts = raw.split("|", 1)
+                decision = parts[0].strip().upper()
+                reason = parts[1].strip()
+            else:
+                decision = raw.split()[0].upper()
+                reason = raw
+
+            # Basic validation
+            final_decision = "IGNORE"
+            if "BOTH" in decision: final_decision = "BOTH"
+            elif "LIKE" in decision: final_decision = "LIKE"
+            elif "COMMENT" in decision: final_decision = "COMMENT"
+            
+            return final_decision, reason
+            
         except Exception as e:
             print(f"Ollama Error in decision: {e}")
-            # Fallback
             import random
-            return random.choice(["LIKE", "IGNORE", "COMMENT"])
+            return random.choice(["LIKE", "IGNORE", "COMMENT"]), "Random fallback due to error"
+
+    def decide_reply_to_comment(self, comment_text: str, post_context: str):
+        """
+        Decides whether to reply to a specific comment on their own post.
+        Returns: (True/False, reason)
+        """
+        prompt = (
+            f"You are {self.persona}. \n"
+            f"You posted: '{post_context}'\n"
+            f"Someone commented: '{comment_text}'\n\n"
+            "Based on your persona, do you want to reply to this comment?\n"
+            "Reply in this format strictly: YES/NO | SHORT_REASON"
+        )
+        
+        try:
+            response = ollama.generate(
+                model=self.model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.5,
+                    "num_predict": 40, 
+                },
+            )
+            raw = response["response"].strip()
+            
+            if "|" in raw:
+                parts = raw.split("|", 1)
+                decision_part = parts[0].strip().upper()
+                reason = parts[1].strip()
+            else:
+                decision_part = raw.split()[0].upper()
+                reason = raw
+
+            return "YES" in decision_part, reason
+        except Exception as e:
+            print(f"Ollama Error in reply decision: {e}")
+            return False, f"Error: {e}"
+
+    def generate_reply_to_comment(self, comment_text: str, post_context: str):
+        context = f"Context: I posted '{post_context}' and someone commented '{comment_text}'. Write a reply to the comment."
+        return self.reply(context)
