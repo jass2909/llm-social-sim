@@ -1,43 +1,87 @@
 import { useState } from "react";
 import axios from "axios";
-import { Heart, MessageCircle, Repeat, Share, MoreHorizontal } from "lucide-react";
 
-export default function Post({ id, bot, text, likes: initialLikes = 0, comments: initialComments = [] }) {
-  const [likes, setLikes] = useState(initialLikes);
+import { MessageCircle, Repeat, Share, MoreHorizontal } from "lucide-react";
+import { useUser } from "../context/UserContext";
+
+export default function Post({ id, bot, text, likes: initialLikes = 0, comments: initialComments = [], reactions: initialReactions = {}, userReactions: initialUserReactions = {} }) {
   const [comments, setComments] = useState(initialComments);
   const [commentInput, setCommentInput] = useState("");
   const [showComments, setShowComments] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
 
-  const addLike = () => {
-    if (isLiked) {
-      setLikes(likes - 1);
-      setIsLiked(false);
-    } else {
-      setLikes(likes + 1);
-      setIsLiked(true);
+
+  const { user } = useUser();
+
+  // Emojis for reaction
+  const EMOJIS = ["👍", "❤️", "😂", "😢", "😡", "🎉", "👎"];
+  const [reactions, setReactions] = useState(initialReactions || {});
+  const [userReactions, setUserReactions] = useState(initialUserReactions || {});
+  
+  const myReaction = user ? userReactions[user.name] : null;
+
+  const handleReact = async (emoji) => {
+    if (!user) return alert("Please login to react");
+    const botName = user.name;
+    
+    // Optimistic Update
+    const oldReaction = userReactions[botName];
+    const isRemove = oldReaction === emoji;
+    
+    // Update local state map
+    const newReactions = { ...reactions };
+    
+    if (oldReaction) {
+        newReactions[oldReaction] = Math.max(0, (newReactions[oldReaction] || 1) - 1);
+        if (newReactions[oldReaction] === 0) delete newReactions[oldReaction];
+    }
+    
+    if (!isRemove) {
+        newReactions[emoji] = (newReactions[emoji] || 0) + 1;
+    }
+    
+    setReactions(newReactions);
+    setUserReactions(prev => {
+        const next = { ...prev };
+        if (isRemove) delete next[botName];
+        else next[botName] = emoji;
+        return next;
+    });
+
+    try {
+        await axios.post(`http://localhost:8000/posts/${id}/react`, { 
+            reaction: emoji,
+            bot: botName
+        });
+    } catch (err) {
+        console.error("Reaction failed:", err);
+        // Revert would go here (complex to implement perfectly without refetch)
     }
   };
 
-  const addComment = () => {
+  const addComment = async () => {
     if (commentInput.trim().length === 0) return;
-    setComments([...comments, commentInput]);
-    setCommentInput("");
-  };
-
-  const handleSimulate = async () => {
+    
+    // Safety check for user
+    const botName = user && user.name ? user.name : "User";
+    
     try {
-      const res = await axios.post(`http://localhost:8000/posts/${id}/simulate_interaction`);
-      console.log(res.data);
-      if (res.data.type === "like") {
-        setLikes(likes + 1);
-      } else if (res.data.type === "comment") {
-        // Support both string and object based comments (fixing potential bug)
-        const newComment = { bot: res.data.bot, text: res.data.comment };
-        setComments([...comments, newComment]);
+      console.log("Posting comment as:", botName);
+      const res = await axios.post(`http://localhost:8000/posts/${id}/comments`, {
+        bot: botName,
+        text: commentInput
+      });
+      
+      console.log("Comment success:", res.data);
+      setComments([...comments, res.data.comment]);
+      setCommentInput("");
+    } catch (err) {
+      console.error("Failed to post comment", err);
+      if (err.response) {
+          console.error("Backend error data:", err.response.data);
+          alert(`Failed: ${JSON.stringify(err.response.data)}`);
+      } else {
+          alert("Failed to post comment. Check console.");
       }
-    } catch (error) {
-      console.error("Simulation failed:", error);
     }
   };
 
@@ -72,45 +116,44 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
           </p>
 
           {/* Actions */}
-          <div className="flex justify-between text-gray-500 max-w-md mt-3">
-            <button
-              className="flex items-center gap-2 group hover:text-blue-500 transition"
-              onClick={(e) => { e.stopPropagation(); setShowComments(!showComments); }}
-            >
-              <div className="p-2 rounded-full group-hover:bg-blue-50 transition">
-                <MessageCircle size={18} />
-              </div>
-              <span className="text-sm">{comments.length}</span>
-            </button>
-
-            <button className="flex items-center gap-2 group hover:text-green-500 transition">
-              <div className="p-2 rounded-full group-hover:bg-green-50 transition">
-                <Repeat size={18} />
-              </div>
-              <span className="text-sm">0</span>
-            </button>
-
-            <button
-              className={`flex items-center gap-2 group hover:text-pink-500 transition ${isLiked ? 'text-pink-600' : ''}`}
-              onClick={(e) => { e.stopPropagation(); addLike(); }}
-            >
-              <div className="p-2 rounded-full group-hover:bg-pink-50 transition">
-                <Heart size={18} fill={isLiked ? "currentColor" : "none"} />
-              </div>
-              <span className="text-sm">{likes}</span>
-            </button>
-
-            <button className="flex items-center gap-2 group hover:text-blue-500 transition">
-              <div className="p-2 rounded-full group-hover:bg-blue-50 transition">
-                <Share size={18} />
-              </div>
-            </button>
-            <button
-              onClick={handleSimulate}
-              className="bg-purple-600 text-white px-3 py-1 rounded"
-            >
-              ⚡️ Simulate
-            </button>
+          <div className="flex flex-col gap-2 mt-3">
+            <div className="flex items-center gap-4 text-gray-500">
+                {/* Comment Button */}
+                <button
+                className="flex items-center gap-2 group hover:text-blue-500 transition"
+                onClick={(e) => { e.stopPropagation(); setShowComments(!showComments); }}
+                >
+                <div className="p-2 rounded-full group-hover:bg-blue-50 transition">
+                    <MessageCircle size={18} />
+                </div>
+                <span className="text-sm">{comments.length}</span>
+                </button>
+            </div>
+            
+            {/* Inline Reactions */}
+            <div className="flex flex-wrap gap-2">
+                {EMOJIS.map(emoji => {
+                    const count = reactions[emoji] || 0;
+                    const isMine = myReaction === emoji;
+                    return (
+                        <button 
+                            key={emoji}
+                            onClick={(e) => { e.stopPropagation(); handleReact(emoji); }}
+                            className={`
+                                flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-all border
+                                ${isMine 
+                                    ? "bg-blue-100 border-blue-300 text-blue-800 font-bold ring-1 ring-blue-300" 
+                                    : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300"
+                                }
+                                ${count > 0 ? "opacity-100" : "opacity-70 hover:opacity-100"}
+                            `}
+                        >
+                            <span>{emoji}</span>
+                            {count > 0 && <span className="text-xs">{count}</span>}
+                        </button>
+                    )
+                })}
+            </div>
           </div>
 
           {/* Comments Section */}

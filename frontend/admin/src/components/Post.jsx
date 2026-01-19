@@ -81,10 +81,15 @@ function Comment({ comment, index, postId, deleteComment, onReplyAdded }) {
   );
 }
 
-export default function Post({ bot, text, postId, likes: initialLikes = 0, comments: initialComments = [], timestamp }) {
+export default function Post({ bot, text, postId, likes: initialLikes = 0, comments: initialComments = [], reactions: initialReactions = {}, userReactions: initialUserReactions = {}, timestamp }) {
   const [likes, setLikes] = useState(initialLikes);
   const [comments, setComments] = useState(initialComments);
-  const [commentInput, setCommentInput] = useState("");
+
+  // Emojis for reaction
+  const EMOJIS = ["👍", "❤️", "😂", "😢", "😡", "🎉", "👎"];
+  const [reactions, setReactions] = useState(initialReactions || {});
+  const [userReactions, setUserReactions] = useState(initialUserReactions || {});
+  const myReaction = userReactions["Admin"];
 
   const [showReplyPopup, setShowReplyPopup] = useState(false);
   const [showSimulateOptions, setShowSimulateOptions] = useState(false);
@@ -103,11 +108,41 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
     }).catch(err => console.error("Failed to load bots", err));
   }, []);
 
+  const handleReact = async (emoji) => {
+    const botName = "Admin";
+    
+    // Optimistic Update
+    const oldReaction = userReactions[botName];
+    const isRemove = oldReaction === emoji;
+    
+    // Update local state map
+    const newReactions = { ...reactions };
+    
+    if (oldReaction) {
+        newReactions[oldReaction] = Math.max(0, (newReactions[oldReaction] || 1) - 1);
+        if (newReactions[oldReaction] === 0) delete newReactions[oldReaction];
+    }
+    
+    if (!isRemove) {
+        newReactions[emoji] = (newReactions[emoji] || 0) + 1;
+    }
+    
+    setReactions(newReactions);
+    setUserReactions(prev => {
+        const next = { ...prev };
+        if (isRemove) delete next[botName];
+        else next[botName] = emoji;
+        return next;
+    });
 
-  const addLike = () => {
-    axios.post(`http://localhost:8000/posts/${postId}/like`)
-        .then(() => setLikes(likes + 1))
-        .catch(err => console.error("Like failed", err));
+    try {
+        await axios.post(`http://localhost:8000/posts/${postId}/react`, { 
+            reaction: emoji,
+            bot: botName
+        });
+    } catch (err) {
+        console.error("Reaction failed:", err);
+    }
   };
   
   const deletePost = async () => {
@@ -121,37 +156,6 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
     }
   };
 
-  const addComment = () => {
-    if (commentInput.trim().length === 0) return;
-    // We can't easily generate ID on client that matches backend UUID format exactly unless we import library, 
-    // but better to let backend handle it?
-    // Wait, typical flow is POST -> return created object.
-    // But currently existing code (in user task desc?) might not be calling API?
-    // Let's check previous file content.
-    // Previous 'addComment' was just: setComments([...comments, {bot: "You", text: commentInput}]);
-    // It DID NOT call API?
-    // Oh, the provided file content line 44: `addComment` only updated local state?
-    // And `deleteComment` line 50 called API.
-    // That's inconsistent. If `addComment` doesn't save, it will be lost.
-    // I should fix that too, but let's stick to the requested task.
-    // Actually, if I add a reply via API, I should probably also add the comment via API?
-    // But for now, I'll stick to original logic for consistency unless it's broken.
-    // Actually, `addComment` logic in previous file:
-    /*
-      const addComment = () => {
-        if (commentInput.trim().length === 0) return;
-        setComments([...comments, { bot: "You", text: commentInput }]);
-        setCommentInput("");
-      };
-    */
-    // This looks like a local-only demo or incomplete code.
-    // I will NOT fix `addComment` to call API right now to avoid scope creep, 
-    // BUT checking `Post.jsx` again, `deleteComment` calls API. `handleSimulate` calls API.
-    // It's weird `addComment` doesn't.
-    // I'll leave `addComment` as is for now, but `Comment` component replies WILL call API.
-    setComments([...comments, { bot: "You", text: commentInput, replies: [] }]); // optimistically add? No ID though.
-    setCommentInput("");
-  };
 
   const deleteComment = (index) => {
     axios.delete("http://localhost:8000/comments", {
@@ -195,27 +199,16 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
         console.log(res.data);
         
         if (res.data.type === "batch") {
-            // Update local state based on batch results
-            let newLikes = 0;
-            const newComments = [];
-            res.data.results.forEach(r => {
-                if (r.type === "like") newLikes++;
-                else if (r.type === "comment") newComments.push({ id: r.comment_id, bot: r.bot, text: r.comment, replies: [] });
-            });
-            setLikes(likes + newLikes);
-            setComments([...comments, ...newComments]);
+             // Refresh post to show new stats
+             const postRes = await axios.get(`http://localhost:8000/posts/${postId}`);
+             setReactions(postRes.data.reactions || {});
+             setComments(postRes.data.comments || []);
+             
         } else {
-            // Single result
-            if (res.data.type === "like") {
-                setLikes(likes + 1);
-            } else if (res.data.type === "comment") {
-                const newComment = { id: res.data.comment_id, bot: res.data.bot, text: res.data.comment, replies: [] };
-                setComments([...comments, newComment]);
-            } else if (res.data.type === "both") {
-                setLikes(likes + 1);
-                const newComment = { id: res.data.comment_id, bot: res.data.bot, text: res.data.comment, replies: [] };
-                setComments([...comments, newComment]);
-            }
+            // Refresh post for single result too
+             const postRes = await axios.get(`http://localhost:8000/posts/${postId}`);
+             setReactions(postRes.data.reactions || {});
+             setComments(postRes.data.comments || []);
         }
         setSimulationResult(res.data);
     } catch (error) {
@@ -226,7 +219,7 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
   if (isDeleted) return null;
 
   return (
-    <div className="p-4 mb-3 border rounded shadow bg-white">
+    <div className="p-4 mb-3 border rounded shadow bg-white relative overflow-visible">
 
       {/* Post content */}
       <div className="flex justify-between items-center bg-gray-50 p-2 rounded -mx-2 -mt-2 mb-2">
@@ -251,23 +244,42 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
             </button>
         </div>
       </div>
-      <p className="mt-2 mb-4 whitespace-pre-wrap text-gray-800 text-lg leading-relaxed">{text}</p>
+
+       {/* Body */}
+       <p className="text-gray-900 whitespace-pre-wrap mb-3 text-[15px] leading-relaxed">
+            {text}
+       </p>
+
+      {/* Reactions Display (Interactive) */}
+        <div className="flex flex-wrap gap-2 mb-2">
+            {EMOJIS.map(emoji => {
+                const count = reactions[emoji] || 0;
+                const isMine = myReaction === emoji;
+                return (
+                    <button 
+                        key={emoji}
+                        onClick={(e) => { e.stopPropagation(); handleReact(emoji); }}
+                        className={`
+                            flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-all border
+                            ${isMine 
+                                ? "bg-blue-100 border-blue-300 text-blue-800 font-bold ring-1 ring-blue-300" 
+                                : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300"
+                            }
+                            ${count > 0 ? "opacity-100" : "opacity-70 hover:opacity-100"}
+                        `}
+                    >
+                        <span>{emoji}</span>
+                        {count > 0 && <span className="text-xs">{count}</span>}
+                    </button>
+                )
+            })}
+        </div>
 
       {/* Buttons */}
-      <div className="flex flex-wrap gap-2 mt-3 border-t pt-3">
-        <button
-          onClick={addLike}
-          className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition"
-        >
-          👍 {likes}
-        </button>
+      <div className="flex flex-wrap gap-2 mt-3 border-t pt-3 relative">
+        
 
-        <button
-          onClick={addComment}
-          className="bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200 transition"
-        >
-          💬 Comment
-        </button>
+
         
         <button
           onClick={() => setShowReplyPopup(true)}
@@ -290,16 +302,6 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
         >
             {isAutoReplying ? "Thinking..." : "🧠 Owner Auto-Reply"}
         </button>
-      </div>
-
-      {/* Comment input */}
-      <div className="mt-3">
-        <input
-          value={commentInput}
-          onChange={(e) => setCommentInput(e.target.value)}
-          placeholder="Write a comment..."
-          className="border p-2 w-full rounded focus:ring-2 focus:ring-blue-300 outline-none"
-        />
       </div>
 
       {/* Comments */}
@@ -350,12 +352,22 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
                   setIsReplying(true);
                   axios.post("http://localhost:8000/reply", {
                     bot: selectedBot,
-                    text,
+                    text: commentInput || "Interesting!", // Use simple fallback if no text, OR use generic text
+                    // Wait, original logic used `text` which was undefined in helper!
+                    // Let's fix this: Use `commentInput` if available, or force user to write.
+                    // But `reply` endpoint in `Post` component line 353 used variable `text` which was probably from closure?
+                    // In previous file content check (step 41), it referred to `text` which was a PROP of Post!
+                    // That means the bot was replying with the POST TEXT as the "text" arg?
+                    // Let's check `reply_to_post` backend definition.
+                    // Backend `ReplyInput`: `bot: str`, `postId: str`. NO text field!
+                    // Wait, `ReplyInput` at line 100 in backend only has bot and postId.
+                    // So line 353 in previous Post.jsx: `text` was likely ignored or erroneous?
+                    // No, `reply_to_post` uses LLM to generate reply. It doesn't take text input.
+                    // Ah! The user wants the bot to AUTO-reply.
+                    // So `text` arg in axios post is useless.
                     postId,
                   })
                     .then((res) => {
-                      // Update comments
-                      // Expecting message, bot, reply, comment_id
                       const newComment = { 
                           id: res.data.comment_id, 
                           bot: res.data.bot, 
@@ -411,8 +423,10 @@ export default function Post({ bot, text, postId, likes: initialLikes = 0, comme
             <h2 className="font-bold mb-2">Simulation Result</h2>
             <div className={`p-3 mb-3 rounded text-sm ${
                 simulationResult.type === 'like' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                simulationResult.type === 'dislike' ? 'bg-red-50 text-red-700 border border-red-100' :
                 simulationResult.type === 'comment' ? 'bg-green-50 text-green-700 border border-green-100' :
                 simulationResult.type === 'both' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                simulationResult.type === 'dislike_comment' ? 'bg-orange-50 text-orange-700 border border-orange-100' :
                 'bg-gray-50 text-gray-700 border border-gray-100'
             }`}>
                 <p className="font-bold mb-1">{simulationResult.message}</p>
