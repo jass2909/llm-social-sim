@@ -6,7 +6,7 @@ import random
 import uuid
 import sys
 
-COMFY = "http://127.0.0.1:8000"
+COMFY = "http://127.0.0.1:8080"
 WORKFLOW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imgg.json")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generatedImg")
 
