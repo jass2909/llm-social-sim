@@ -177,10 +177,16 @@ class OllamaBot(BaseBot):
         prompt = (
             f"You are {self.persona}. \n"
             f"You see this post on your social feed: '{post_content}'\n\n"
-            "Based on your persona, would you 'LIKE', 'COMMENT', 'BOTH' (Like & Comment), or 'IGNORE' this post?\n"
+            "Based on your persona, choose ONE action:\n"
+            "- 'LIKE' (if you enjoy/agree)\n"
+            "- 'DISLIKE' (if you dislike/disagree)\n"
+            "- 'COMMENT' (if you want to reply)\n"
+            "- 'LIKE_AND_COMMENT' (if you enjoy AND want to reply)\n"
+            "- 'DISLIKE_AND_COMMENT' (if you dislike AND want to reply)\n"
+            "- 'IGNORE' (if you are indifferent)\n\n"
             "Reply in this format strictly: DECISION | SHORT_REASON\n"
             "Example: LIKE | It's funny and relates to tech.\n"
-            "Example: IGNORE | Not interested in politics."
+            "Example: DISLIKE | I strongly disagree with this view."
         )
         
         try:
@@ -205,7 +211,9 @@ class OllamaBot(BaseBot):
 
             # Basic validation
             final_decision = "IGNORE"
-            if "BOTH" in decision: final_decision = "BOTH"
+            if "DISLIKE_AND_COMMENT" in decision: final_decision = "DISLIKE_AND_COMMENT"
+            elif "LIKE_AND_COMMENT" in decision or "BOTH" in decision: final_decision = "LIKE_AND_COMMENT"
+            elif "DISLIKE" in decision: final_decision = "DISLIKE"
             elif "LIKE" in decision: final_decision = "LIKE"
             elif "COMMENT" in decision: final_decision = "COMMENT"
             
@@ -214,7 +222,7 @@ class OllamaBot(BaseBot):
         except Exception as e:
             print(f"Ollama Error in decision: {e}")
             import random
-            return random.choice(["LIKE", "IGNORE", "COMMENT"]), "Random fallback due to error"
+            return random.choice(["LIKE", "DISLIKE", "IGNORE", "COMMENT"]), "Random fallback due to error"
 
     def decide_reply_to_comment(self, comment_text: str, post_context: str):
         """

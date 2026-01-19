@@ -1,7 +1,9 @@
 import { Home, Search, Bell, User, PenTool, LogOut } from 'lucide-react';
+import { useUser } from '../../context/UserContext';
 import { useState } from 'react';
 
 export default function Sidebar() {
+    const { user, logout } = useUser();
     const navItems = [
         { icon: <Home size={28} />, label: "Home" },
         { icon: <Search size={28} />, label: "Explore" },
@@ -32,6 +34,7 @@ export default function Sidebar() {
                 </nav>
 
                 {/* Post Button */}
+                {/* Post Button */}
                 <button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-4 xl:px-8 xl:py-3 font-bold text-lg mt-4 shadow-md transition transform hover:scale-105 w-fit xl:w-full flex justify-center">
                     <span className="hidden xl:block">Post</span>
                     <PenTool className="block xl:hidden" />
@@ -40,12 +43,16 @@ export default function Sidebar() {
 
             {/* User Profile (Bottom) */}
             <div className="flex items-center gap-3 p-3 hover:bg-gray-200 rounded-full cursor-pointer transition w-full justify-center xl:justify-start mb-4">
-                <div className="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0" />
-                <div className="hidden xl:block overflow-hidden">
-                    <p className="font-bold text-sm truncate">User Name</p>
-                    <p className="text-gray-500 text-sm truncate">@username</p>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                    {user?.name[0]?.toUpperCase() || "?"}
                 </div>
-                <LogOut className="hidden xl:block ml-auto text-gray-500" size={16} />
+                <div className="hidden xl:block overflow-hidden">
+                    <p className="font-bold text-sm truncate">{user?.name || "User"}</p>
+                    <p className="text-gray-500 text-sm truncate">@{user?.name?.replace(/\s+/g, '').toLowerCase() || "user"}</p>
+                </div>
+                <button onClick={logout} className="ml-auto p-2 text-gray-500 hover:text-red-500 rounded-full hover:bg-red-50 transition">
+                    <LogOut size={20} />
+                </button>
             </div>
         </div>
     );

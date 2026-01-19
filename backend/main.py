@@ -64,6 +64,7 @@ def create_post(post: PostInput):
         "bot": post.bot,
         "text": post.text,
         "likes": 0,
+        "reactions": {},
         "comments": [],
         "timestamp": firestore.SERVER_TIMESTAMP,
     }
@@ -212,6 +213,34 @@ def reply_to_comment(post_id: str, comment_id: str, body: CommentReplyInput):
     return {"message": "Reply added", "reply": reply_obj}
 
 
+class ManualCommentInput(BaseModel):
+    bot: str
+    text: str
+
+@app.post("/posts/{post_id}/comments")
+def add_manual_comment(post_id: str, body: ManualCommentInput):
+    post_ref = db.collection("posts").document(post_id)
+    snapshot = post_ref.get()
+    
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Post not found")
+        
+    comment_id = str(uuid.uuid4())
+    new_comment = {
+        "id": comment_id,
+        "bot": body.bot,
+        "text": body.text,
+        "replies": [],
+        "timestamp": str(datetime.now())
+    }
+    
+    post_ref.update({
+        "comments": firestore.ArrayUnion([new_comment])
+    })
+    
+    return {"message": "Comment added", "comment": new_comment}
+
+
 @app.post("/posts/{post_id}/owner_reply")
 def owner_reply_trigger(post_id: str):
     post_ref = db.collection("posts").document(post_id)
@@ -283,18 +312,46 @@ def owner_reply_trigger(post_id: str):
 
 
 
-@app.post("/posts/{post_id}/like")
-def like_post(post_id: str):
+
+class ReactionInput(BaseModel):
+    reaction: str
+    bot: str
+
+@app.post("/posts/{post_id}/react")
+def react_to_post(post_id: str, body: ReactionInput):
     post_ref = db.collection("posts").document(post_id)
     snapshot = post_ref.get()
     
     if not snapshot.exists:
         raise HTTPException(status_code=404, detail="Post not found")
         
-    post_ref.update({"likes": firestore.Increment(1)})
+    data = snapshot.to_dict()
+    user_reactions = data.get("user_reactions", {})
     
-    return {"message": "Post liked", "id": post_id}
+    current_reaction = user_reactions.get(body.bot)
+    new_reaction = body.reaction
+    
+    updates = {}
+    
+    if current_reaction == new_reaction:
+        # User clicking same reaction -> Toggle OFF (Remove)
+        updates[f"user_reactions.{body.bot}"] = firestore.DELETE_FIELD
+        updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+        action = "removed"
+    else:
+        # New reaction or changing reaction
+        if current_reaction:
+             # Decrement old
+             updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+        
+        # Increment new
+        updates[f"reactions.{new_reaction}"] = firestore.Increment(1)
+        updates[f"user_reactions.{body.bot}"] = new_reaction
+        action = "updated"
 
+    post_ref.update(updates)
+    
+    return {"message": f"Reaction {action}", "id": post_id, "reaction": new_reaction, "action": action}
 
 @app.delete("/posts/{post_id}")
 def delete_post(post_id: str):
@@ -328,8 +385,19 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
     action, reason = ollama_bot.decide_interaction(post_data.get("text", "")) # Returns LIKE, COMMENT, or IGNORE
     print(f"[Simulate] {bot_name} chose to {action} (Reason: {reason})")
 
+    user_reactions = post_data.get("user_reactions", {})
+    current_reaction = user_reactions.get(bot_name)
+
     if action == "LIKE":
-        post_ref.update({"likes": firestore.Increment(1)})
+        # Use Reaction Logic (Thumbs Up)
+        updates = {}
+        if current_reaction != "👍":
+            updates[f"user_reactions.{bot_name}"] = "👍"
+            updates["reactions.👍"] = firestore.Increment(1)
+            if current_reaction:
+                 updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+            
+            post_ref.update(updates)
         
         # Save Memory
         ollama_bot.remember(
@@ -343,6 +411,31 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
             "reason": reason,
             "message": f"{bot_name} liked the post. Reason: {reason}"
         }
+    
+    elif action == "DISLIKE":
+        # Use Reaction Logic (Thumbs Down)
+        updates = {}
+        if current_reaction != "👎":
+            updates[f"user_reactions.{bot_name}"] = "👎"
+            updates["reactions.👎"] = firestore.Increment(1)
+            if current_reaction:
+                 updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+            
+            post_ref.update(updates)
+        
+        # Save Memory
+        ollama_bot.remember(
+            f"I disliked a post: '{post_data.get('text', '')[:50]}...'", 
+            metadata={"type": "interaction", "action": "DISLIKE", "reason": reason}
+        )
+
+        return {
+            "type": "dislike",
+            "bot": bot_name,
+            "reason": reason,
+            "message": f"{bot_name} disliked the post. Reason: {reason}"
+        }
+
     elif action == "COMMENT":
         reply = ollama_bot.reply(post_data.get("text", ""))
         comment_id = str(uuid.uuid4())
@@ -351,7 +444,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
             "comments": firestore.ArrayUnion([comment])
         })
         
-        # Save Memory (reply() handles conversation memory, but we want to capture the specific interaction context too)
+        # Save Memory
         ollama_bot.remember(
             f"I commented on a post: '{post_data.get('text', '')[:50]}...' My comment: '{reply}'", 
             metadata={"type": "interaction", "action": "COMMENT", "reason": reason}
@@ -365,9 +458,16 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
             "reason": reason,
             "message": f"{bot_name} commented: {reply}. Reason: {reason}"
         }
-    elif action == "BOTH":
-        # Like
-        post_ref.update({"likes": firestore.Increment(1)})
+    elif action in ["LIKE_AND_COMMENT", "BOTH"]:
+        # Like (Reaction)
+        updates = {}
+        if current_reaction != "👍":
+            updates[f"user_reactions.{bot_name}"] = "👍"
+            updates["reactions.👍"] = firestore.Increment(1)
+            if current_reaction:
+                 updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+            post_ref.update(updates)
+
         # Comment
         reply = ollama_bot.reply(post_data.get("text", ""))
         comment_id = str(uuid.uuid4())
@@ -379,7 +479,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
         # Save Memory
         ollama_bot.remember(
             f"I liked and commented on a post: '{post_data.get('text', '')[:50]}...' My comment: '{reply}'", 
-            metadata={"type": "interaction", "action": "BOTH", "reason": reason}
+            metadata={"type": "interaction", "action": "LIKE_AND_COMMENT", "reason": reason}
         )
         
         return {
@@ -389,6 +489,38 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
             "comment_id": comment_id,
             "reason": reason,
             "message": f"{bot_name} liked & commented: {reply}. Reason: {reason}"
+        }
+    elif action == "DISLIKE_AND_COMMENT":
+        # Dislike (Reaction)
+        updates = {}
+        if current_reaction != "👎":
+            updates[f"user_reactions.{bot_name}"] = "👎"
+            updates["reactions.👎"] = firestore.Increment(1)
+            if current_reaction:
+                 updates[f"reactions.{current_reaction}"] = firestore.Increment(-1)
+            post_ref.update(updates)
+
+        # Comment
+        reply = ollama_bot.reply(post_data.get("text", ""))
+        comment_id = str(uuid.uuid4())
+        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
+        post_ref.update({
+            "comments": firestore.ArrayUnion([comment])
+        })
+        
+        # Save Memory
+        ollama_bot.remember(
+            f"I disliked and commented on a post: '{post_data.get('text', '')[:50]}...' My comment: '{reply}'", 
+            metadata={"type": "interaction", "action": "DISLIKE_AND_COMMENT", "reason": reason}
+        )
+        
+        return {
+            "type": "dislike_comment",
+            "bot": bot_name,
+            "comment": reply,
+            "comment_id": comment_id,
+            "reason": reason,
+            "message": f"{bot_name} disliked & commented: {reply}. Reason: {reason}"
         }
 
     else:
@@ -536,6 +668,12 @@ class PredictInput(BaseModel):
 def predict_best_action(data: PredictInput):
     # Convert input to gymnasium observation format (numpy array)
     import numpy as np
+    # Just use passed data.likes if compliant, but if we want to enforce reaction count:
+    # The input comes from frontend which will now send reaction count.
+    # So actually, frontend changes are needed first?
+    # No, PredictInput is just a model. Backend logic relies on what caller sends.
+    # But generate_optimized_post (auto mode) reads from Firestore.
+    
     obs = np.array([data.likes, data.comments, data.sentiment, data.interaction])
     action = get_agent_action(obs)
     
@@ -611,7 +749,13 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
             
             for doc in docs:
                 p = doc.to_dict()
-                total_likes += p.get("likes", 0)
+                # Adapting to use reactions['👍'] as likes
+                reactions = p.get("reactions", {})
+                # Consider Thumbs Up and Heart as positive "likes" for the agent
+                likes_count = reactions.get("👍", 0) + reactions.get("❤️", 0)
+                
+                total_likes += likes_count
+                
                 # comments is a list, take length
                 total_comments += len(p.get("comments", []))
                 count += 1
@@ -627,7 +771,7 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
                 interaction = 0.0
 
             obs = np.array([avg_likes, avg_comments, 0.8, interaction])
-            print(f"Using Real Stats: Likes={avg_likes}, Comments={avg_comments}")
+            print(f"Using Real Stats (Reactions): Likes={avg_likes}, Comments={avg_comments}")
         else:
             obs = np.array([data.likes, data.comments, data.sentiment, data.interaction])
         
