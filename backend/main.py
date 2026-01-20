@@ -14,6 +14,7 @@ from backend.ml.agent import train_agent, get_agent_action
 from backend.ml.explain import explain_agent_decision
 from fastapi.staticfiles import StaticFiles
 from backend.media import imageGen
+from backend.utils import filter_profanity
 
 from typing import Optional
 
@@ -73,7 +74,7 @@ def get_posts():
 def create_post(post: PostInput):
     doc = {
         "bot": post.bot,
-        "text": post.text,
+        "text": filter_profanity(post.text),
         "likes": 0,
         "reactions": {},
         "comments": [],
@@ -174,7 +175,7 @@ def reply_to_post(body: ReplyInput):
     new_comment = {
         "id": new_comment_id,
         "bot": matching["name"],
-        "text": generated_reply,
+        "text": filter_profanity(generated_reply),
         "replies": []
     }
     
@@ -237,7 +238,7 @@ def reply_to_comment(post_id: str, comment_id: str, body: CommentReplyInput):
     # Add reply
     reply_obj = {
         "bot": body.bot,
-        "text": body.text,
+        "text": filter_profanity(body.text),
         "timestamp": str(datetime.now())
     }
     
@@ -267,7 +268,7 @@ def add_manual_comment(post_id: str, body: ManualCommentInput):
     new_comment = {
         "id": comment_id,
         "bot": body.bot,
-        "text": body.text,
+        "text": filter_profanity(body.text),
         "replies": [],
         "timestamp": str(datetime.now())
     }
@@ -331,7 +332,7 @@ def owner_reply_trigger(post_id: str):
             
             c["replies"].append({
                 "bot": owner_name,
-                "text": reply_text,
+                "text": filter_profanity(reply_text),
                 "timestamp": str(datetime.now())
             })
             replied_count += 1
@@ -477,7 +478,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
     elif action == "COMMENT":
         reply = ollama_bot.reply(post_data.get("text", ""))
         comment_id = str(uuid.uuid4())
-        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
+        comment = {"id": comment_id, "bot": bot_name, "text": filter_profanity(reply), "replies": []}
         post_ref.update({
             "comments": firestore.ArrayUnion([comment])
         })
@@ -509,7 +510,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
         # Comment
         reply = ollama_bot.reply(post_data.get("text", ""))
         comment_id = str(uuid.uuid4())
-        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
+        comment = {"id": comment_id, "bot": bot_name, "text": filter_profanity(reply), "replies": []}
         post_ref.update({
             "comments": firestore.ArrayUnion([comment])
         })
@@ -541,7 +542,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
         # Comment
         reply = ollama_bot.reply(post_data.get("text", ""))
         comment_id = str(uuid.uuid4())
-        comment = {"id": comment_id, "bot": bot_name, "text": reply, "replies": []}
+        comment = {"id": comment_id, "bot": bot_name, "text": filter_profanity(reply), "replies": []}
         post_ref.update({
             "comments": firestore.ArrayUnion([comment])
         })
@@ -854,6 +855,6 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
     return {
         "strategy_used": strategy,
         "bot": matching["name"],
-        "generated_content": post_content,
+        "generated_content": filter_profanity(post_content),
         "image": image_url
     }
