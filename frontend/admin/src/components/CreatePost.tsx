@@ -44,7 +44,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
     try {
       const res = await axios.post(
         "http://localhost:8000/posts",
-        { bot, text, generate_image: generateImage },
+        { bot, text, generate_image: false },
         { headers: { "Content-Type": "application/json" } }
       )
       setSuccess("✅ Post created successfully!")
@@ -153,16 +153,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
           className="border p-2 rounded min-h-[100px]"
           required
         />
-        <div className="flex items-center gap-2 mb-2">
-          <input
-            type="checkbox"
-            id="genImg"
-            checked={generateImage}
-            onChange={e => setGenerateImage(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <label htmlFor="genImg" className="text-sm text-gray-700">Generate AI Image</label>
-        </div>
+
 
         <div className="flex gap-2">
           <button
