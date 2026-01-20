@@ -12,11 +12,12 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [bots, setBots] = useState<string[]>([])
-  
+
   // Modal State
   const [showModal, setShowModal] = useState(false)
   const [selectedBotForGen, setSelectedBotForGen] = useState("")
   const [topic, setTopic] = useState("")
+  const [generateImage, setGenerateImage] = useState(false)
 
   useEffect(() => {
     const fetchBots = async () => {
@@ -43,12 +44,13 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
     try {
       const res = await axios.post(
         "http://localhost:8000/posts",
-        { bot, text },
+        { bot, text, generate_image: generateImage },
         { headers: { "Content-Type": "application/json" } }
       )
       setSuccess("✅ Post created successfully!")
       setBot("")
       setText("")
+      setGenerateImage(false)
       if (onPostCreated) onPostCreated(res.data.post)
     } catch (err) {
       console.error(err)
@@ -65,6 +67,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
     setShowModal(true)
     setSelectedBotForGen("")
     setTopic("")
+    setGenerateImage(false)
   }
 
   // The actual generation logic
@@ -73,7 +76,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
     setLoading(true)
     setError("")
     setSuccess("")
-    
+
     try {
       let botNameToUse = specificBotName
 
@@ -96,15 +99,20 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
         comments: -1,
         sentiment: 0.9,
         interaction: 0.8,
-        topic: topic // Pass the optional topic
+        topic: topic, // Pass the optional topic
+        generate_image: generateImage
       })
-      
-      const { generated_content, bot: generatedBot } = genRes.data
-      
+
+      const { generated_content, bot: generatedBot, image: generatedImage } = genRes.data
+
       // 3. Publish the Post
       const postRes = await axios.post(
         "http://localhost:8000/posts",
-        { bot: generatedBot, text: generated_content },
+        {
+          bot: generatedBot,
+          text: generated_content,
+          image: generatedImage // Pass the already generated image URL if any
+        },
         { headers: { "Content-Type": "application/json" } }
       )
 
@@ -112,7 +120,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
       setBot("")
       setText("")
       if (onPostCreated) onPostCreated(postRes.data)
-      
+
     } catch (err) {
       console.error(err)
       setError("❌ Failed to auto-generate post")
@@ -132,11 +140,11 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
           required
         >
           <option value="">Select a bot</option>
-            {bots.map((b: any, index) => (
-              <option key={`${b.name}-${index}`} value={b.name}>
-                {b.name} — {b.model}
-              </option>
-            ))}
+          {bots.map((b: any, index) => (
+            <option key={`${b.name}-${index}`} value={b.name}>
+              {b.name} — {b.model}
+            </option>
+          ))}
         </select>
         <textarea
           placeholder="Write your post..."
@@ -145,6 +153,17 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
           className="border p-2 rounded min-h-[100px]"
           required
         />
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="checkbox"
+            id="genImg"
+            checked={generateImage}
+            onChange={e => setGenerateImage(e.target.checked)}
+            className="w-4 h-4"
+          />
+          <label htmlFor="genImg" className="text-sm text-gray-700">Generate AI Image</label>
+        </div>
+
         <div className="flex gap-2">
           <button
             type="submit"
@@ -171,17 +190,28 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-fade-in border border-gray-100">
             <h3 className="text-lg font-bold mb-4 text-center text-gray-800">Choose Generation Mode</h3>
-            
+
             <div className="mb-4">
-               <label className="text-sm font-medium text-gray-600 block mb-1">Topic (Optional):</label>
-               <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g., The Future of AI, Best Coffee Spots..."
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-purple-200 outline-none text-sm"
-               />
-               <p className="text-xs text-gray-400 mt-1">Leave empty to let the ML Agent decide.</p>
+              <label className="text-sm font-medium text-gray-600 block mb-1">Topic (Optional):</label>
+              <input
+                type="text"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g., The Future of AI, Best Coffee Spots..."
+                className="w-full border p-2 rounded focus:ring-2 focus:ring-purple-200 outline-none text-sm"
+              />
+              <p className="text-xs text-gray-400 mt-1">Leave empty to let the ML Agent decide.</p>
+            </div>
+
+            <div className="mb-4 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="genImgModal"
+                checked={generateImage}
+                onChange={e => setGenerateImage(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="genImgModal" className="text-sm text-gray-700">Include AI Image</label>
             </div>
 
             <div className="flex flex-col gap-4">
@@ -210,7 +240,7 @@ export default function CreatePost({ onPostCreated }: CreatePostProps) {
                   <option value="">-- Choose Bot --</option>
                   {bots.map((b: any, index) => (
                     <option key={`gen-${b.name}-${index}`} value={b.name}>
-                       {b.name}
+                      {b.name}
                     </option>
                   ))}
                 </select>

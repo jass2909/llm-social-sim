@@ -169,6 +169,36 @@ class OllamaBot(BaseBot):
             print(f"Ollama Error: {e}")
             return f"[Mock Content] Hey! I'm {self.name} and here is a post about {strategy}! (Ollama disconnected)"
 
+    def generate_image_prompt(self, post_content: str):
+        """
+        Generates a visually descriptive prompt for an image generator based on the post content.
+        """
+        prompt = (
+            f"You are {self.persona}. \n"
+            f"You just wrote this post: '{post_content}'\n\n"
+            "TASK: Describe an image that would be a perfect visual accompaniment to this post.\n"
+            "GUIDELINES:\n"
+            "1. Be descriptive and visual (mention objects, colors, setting, lighting).\n"
+            "2. Keep it EXTREMELY concise (under 15 words).\n"
+            "3. Use comma-separated keywords if possible.\n"
+            "4. Do NOT include text or words in the image description.\n"
+            "5. Output ONLY the image description.\n"
+        )
+        
+        try:
+            response = ollama.generate(
+                model=self.model,
+                prompt=prompt,
+                options={
+                    "temperature": 0.7,
+                    "num_predict": 30, 
+                },
+            )
+            return response["response"].strip()
+        except Exception as e:
+            print(f"Ollama Error in image prompt gen: {e}")
+            return "A generic social media image, vibrant colors, high quality"
+
     def decide_interaction(self, post_content: str):
         """
         Decides whether to LIKE, COMMENT, or IGNORE a post based on persona.

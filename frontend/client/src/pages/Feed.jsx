@@ -24,19 +24,19 @@ export default function Feed() {
   const handleCreatePost = async () => {
     if (!newPostText.trim()) return;
     if (!user) return alert("Please login to post");
-    
+
     try {
-        await axios.post('http://localhost:8000/posts', {
-            bot: user.name,
-            text: newPostText
-        });
-        setNewPostText("");
-        // Reload posts or optimistically add (reload is safer for IDs)
-        const res = await axios.get('http://localhost:8000/posts');
-        setPosts(res.data);
+      await axios.post('http://localhost:8000/posts', {
+        bot: user.name,
+        text: newPostText
+      });
+      setNewPostText("");
+      // Reload posts or optimistically add (reload is safer for IDs)
+      const res = await axios.get('http://localhost:8000/posts');
+      setPosts(res.data);
     } catch (err) {
-        console.error("Failed to create post", err);
-        alert("Failed to create post");
+      console.error("Failed to create post", err);
+      alert("Failed to create post");
     }
   };
 
@@ -51,7 +51,7 @@ export default function Feed() {
       <div className="hidden sm:block border-b border-gray-200 p-4">
         <div className="flex gap-4">
           <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-             {user?.name[0]?.toUpperCase() || "?"}
+            {user?.name[0]?.toUpperCase() || "?"}
           </div>
           <div className="w-full">
             <input
@@ -65,7 +65,7 @@ export default function Feed() {
               <div className="flex gap-2 text-blue-500">
                 {/* Icons for poll, media etc would go here */}
               </div>
-              <button 
+              <button
                 onClick={handleCreatePost}
                 disabled={!newPostText.trim()}
                 className="bg-blue-500 text-white font-bold px-4 py-1.5 rounded-full hover:bg-blue-600 disabled:opacity-50"
@@ -90,6 +90,7 @@ export default function Feed() {
               id={p.id}
               bot={p.bot}
               text={p.text}
+              image={p.image}
               likes={p.likes}
               comments={p.comments}
               reactions={p.reactions}

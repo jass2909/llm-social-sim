@@ -10,11 +10,18 @@ from backend.firestore.firebase import db
 from firebase_admin import firestore
 from pydantic import BaseModel
 from backend.ml.agent import train_agent, get_agent_action
+from backend.ml.agent import train_agent, get_agent_action
 from backend.ml.explain import explain_agent_decision
+from fastapi.staticfiles import StaticFiles
+from backend.media import imageGen
+
+from typing import Optional
 
 class PostInput(BaseModel):
     bot: str
     text: str
+    generate_image: bool = False
+    image: Optional[str] = None
 
 
 app = FastAPI(title="LLM Social Sim API")
@@ -26,6 +33,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount generated images
+os.makedirs("backend/media/generatedImg", exist_ok=True)
+app.mount("/media", StaticFiles(directory="backend/media/generatedImg"), name="media")
 
 @app.get("/")
 def root():
@@ -67,11 +78,38 @@ def create_post(post: PostInput):
         "reactions": {},
         "comments": [],
         "timestamp": firestore.SERVER_TIMESTAMP,
+        "image": post.image
     }
+
     # Save to Memory
     with open("backend/bots/personas.json") as f:
         bots = json.load(f)
     bot_data = next((b for b in bots if b["name"] == post.bot), None)
+
+    # 1. Handle Image Generation Request
+    if post.generate_image and bot_data:
+        try:
+            # a) Get prompt from Bot
+            ollama_bot = OllamaBot(post.bot, bot_data["model"], bot_data)
+            image_prompt = ollama_bot.generate_image_prompt(post.text)
+            print(f"[ImageGen] Prompt: {image_prompt}")
+
+            # b) Generate Image
+            # Ensure ComfyUI is up or handle error
+            try:
+                # Mock or Real? Real as per user request
+                # Check if we can connect inside imageGen, otherwise we might fail
+                # But imageGen automatically checks, might crash if not found.
+                # Let's wrap in safe block
+                img_path = imageGen.generate_image(image_prompt)
+                filename = os.path.basename(img_path)
+                public_url = f"/media/{filename}" # Relative path for frontend
+                doc["image"] = public_url
+                print(f"[ImageGen] Success: {public_url}")
+            except Exception as e:
+                print(f"[ImageGen] Failed generation: {e}")
+        except Exception as e:
+            print(f"[ImageGen] Failed prompt: {e}")
     
     if bot_data:
         try:
@@ -279,7 +317,7 @@ def owner_reply_trigger(post_id: str):
             
         # Decide
         should_reply, reason = ollama_bot.decide_reply_to_comment(c.get("text", ""), post_text)
-        print(f"Owner {owner_name} logic: {c.get('bot')} -> Reply? {should_reply} (Reason: {reason})")
+        print(f"Owner {owner_name} logic: {c.get('bot')} -> Reply? {should_reply} (Reason: {reason})".encode("ascii", "replace").decode("ascii"))
         
         actions_taken.append({
             "comment_id": c.get("id"),
@@ -383,7 +421,7 @@ def _process_bot_interaction(bot_data, post_data, post_ref):
 
     # Decide Action
     action, reason = ollama_bot.decide_interaction(post_data.get("text", "")) # Returns LIKE, COMMENT, or IGNORE
-    print(f"[Simulate] {bot_name} chose to {action} (Reason: {reason})")
+    print(f"[Simulate] {bot_name} chose to {action} (Reason: {reason})".encode("ascii", "replace").decode("ascii"))
 
     user_reactions = post_data.get("user_reactions", {})
     current_reaction = user_reactions.get(bot_name)
@@ -663,6 +701,7 @@ class PredictInput(BaseModel):
     sentiment: float
     interaction: float
     topic: str = None  # Optional topic override
+    generate_image: bool = False
 
 @app.post("/ml/predict")
 def predict_best_action(data: PredictInput):
@@ -798,10 +837,23 @@ def generate_optimized_post(data: PredictInput, bot: str = Query("TechGuru")):
     ollama_bot = OllamaBot(matching["name"], matching["model"], matching)
     
     # Pass the strategy (which might be the manual topic now)
+    # Pass the strategy (which might be the manual topic now)
     post_content = ollama_bot.generate_from_strategy(strategy)
+
+    # 3. Handle Image Generation
+    image_url = None
+    if data.generate_image:
+        try:
+            img_prompt = ollama_bot.generate_image_prompt(post_content)
+            print(f"[Auto-Gen] Image Prompt: {img_prompt}")
+            img_path = imageGen.generate_image(img_prompt)
+            image_url = f"/media/{os.path.basename(img_path)}"
+        except Exception as e:
+            print(f"[Auto-Gen] Image Gen Failed: {e}")
     
     return {
         "strategy_used": strategy,
         "bot": matching["name"],
-        "generated_content": post_content
+        "generated_content": post_content,
+        "image": image_url
     }

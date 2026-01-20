@@ -4,7 +4,7 @@ import axios from "axios";
 import { MessageCircle, Repeat, Share, MoreHorizontal } from "lucide-react";
 import { useUser } from "../context/UserContext";
 
-export default function Post({ id, bot, text, likes: initialLikes = 0, comments: initialComments = [], reactions: initialReactions = {}, userReactions: initialUserReactions = {} }) {
+export default function Post({ id, bot, text, image, likes: initialLikes = 0, comments: initialComments = [], reactions: initialReactions = {}, userReactions: initialUserReactions = {} }) {
   const [comments, setComments] = useState(initialComments);
   const [commentInput, setCommentInput] = useState("");
   const [showComments, setShowComments] = useState(false);
@@ -16,71 +16,71 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
   const EMOJIS = ["👍", "❤️", "😂", "😢", "😡", "🎉", "👎"];
   const [reactions, setReactions] = useState(initialReactions || {});
   const [userReactions, setUserReactions] = useState(initialUserReactions || {});
-  
+
   const myReaction = user ? userReactions[user.name] : null;
 
   const handleReact = async (emoji) => {
     if (!user) return alert("Please login to react");
     const botName = user.name;
-    
+
     // Optimistic Update
     const oldReaction = userReactions[botName];
     const isRemove = oldReaction === emoji;
-    
+
     // Update local state map
     const newReactions = { ...reactions };
-    
+
     if (oldReaction) {
-        newReactions[oldReaction] = Math.max(0, (newReactions[oldReaction] || 1) - 1);
-        if (newReactions[oldReaction] === 0) delete newReactions[oldReaction];
+      newReactions[oldReaction] = Math.max(0, (newReactions[oldReaction] || 1) - 1);
+      if (newReactions[oldReaction] === 0) delete newReactions[oldReaction];
     }
-    
+
     if (!isRemove) {
-        newReactions[emoji] = (newReactions[emoji] || 0) + 1;
+      newReactions[emoji] = (newReactions[emoji] || 0) + 1;
     }
-    
+
     setReactions(newReactions);
     setUserReactions(prev => {
-        const next = { ...prev };
-        if (isRemove) delete next[botName];
-        else next[botName] = emoji;
-        return next;
+      const next = { ...prev };
+      if (isRemove) delete next[botName];
+      else next[botName] = emoji;
+      return next;
     });
 
     try {
-        await axios.post(`http://localhost:8000/posts/${id}/react`, { 
-            reaction: emoji,
-            bot: botName
-        });
+      await axios.post(`http://localhost:8000/posts/${id}/react`, {
+        reaction: emoji,
+        bot: botName
+      });
     } catch (err) {
-        console.error("Reaction failed:", err);
-        // Revert would go here (complex to implement perfectly without refetch)
+      console.error("Reaction failed:", err);
+      // Revert would go here (complex to implement perfectly without refetch)
     }
   };
 
   const addComment = async () => {
     if (commentInput.trim().length === 0) return;
-    
+
     // Safety check for user
     const botName = user && user.name ? user.name : "User";
-    
+
     try {
       console.log("Posting comment as:", botName);
       const res = await axios.post(`http://localhost:8000/posts/${id}/comments`, {
         bot: botName,
         text: commentInput
       });
-      
+
       console.log("Comment success:", res.data);
       setComments([...comments, res.data.comment]);
       setCommentInput("");
     } catch (err) {
       console.error("Failed to post comment", err);
       if (err.response) {
-          console.error("Backend error data:", err.response.data);
-          alert(`Failed: ${JSON.stringify(err.response.data)}`);
+        console.error("Backend error data:", err.response.data);
+        alert(`Failed: ${JSON.stringify(err.response.data)}`);
       } else {
-          alert("Failed to post comment. Check console.");
+        alert("Failed to post comment. Check console.");
       }
     }
   };
@@ -115,44 +115,50 @@ export default function Post({ id, bot, text, likes: initialLikes = 0, comments:
             {text}
           </p>
 
+          {image && (
+            <div className="mb-3 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+              <img src={`http://localhost:8000${image}`} alt="Post Media" className="w-full h-auto object-cover max-h-96" />
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex flex-col gap-2 mt-3">
             <div className="flex items-center gap-4 text-gray-500">
-                {/* Comment Button */}
-                <button
+              {/* Comment Button */}
+              <button
                 className="flex items-center gap-2 group hover:text-blue-500 transition"
                 onClick={(e) => { e.stopPropagation(); setShowComments(!showComments); }}
-                >
+              >
                 <div className="p-2 rounded-full group-hover:bg-blue-50 transition">
-                    <MessageCircle size={18} />
+                  <MessageCircle size={18} />
                 </div>
                 <span className="text-sm">{comments.length}</span>
-                </button>
+              </button>
             </div>
-            
+
             {/* Inline Reactions */}
             <div className="flex flex-wrap gap-2">
-                {EMOJIS.map(emoji => {
-                    const count = reactions[emoji] || 0;
-                    const isMine = myReaction === emoji;
-                    return (
-                        <button 
-                            key={emoji}
-                            onClick={(e) => { e.stopPropagation(); handleReact(emoji); }}
-                            className={`
+              {EMOJIS.map(emoji => {
+                const count = reactions[emoji] || 0;
+                const isMine = myReaction === emoji;
+                return (
+                  <button
+                    key={emoji}
+                    onClick={(e) => { e.stopPropagation(); handleReact(emoji); }}
+                    className={`
                                 flex items-center gap-1 px-2 py-1 rounded-full text-sm transition-all border
-                                ${isMine 
-                                    ? "bg-blue-100 border-blue-300 text-blue-800 font-bold ring-1 ring-blue-300" 
-                                    : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300"
-                                }
+                                ${isMine
+                        ? "bg-blue-100 border-blue-300 text-blue-800 font-bold ring-1 ring-blue-300"
+                        : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 hover:border-gray-300"
+                      }
                                 ${count > 0 ? "opacity-100" : "opacity-70 hover:opacity-100"}
                             `}
-                        >
-                            <span>{emoji}</span>
-                            {count > 0 && <span className="text-xs">{count}</span>}
-                        </button>
-                    )
-                })}
+                  >
+                    <span>{emoji}</span>
+                    {count > 0 && <span className="text-xs">{count}</span>}
+                  </button>
+                )
+              })}
             </div>
           </div>
 

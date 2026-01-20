@@ -6,6 +6,7 @@ import random
 import uuid
 import sys
 
+
 COMFY = "http://127.0.0.1:8080"
 WORKFLOW_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "imgg.json")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generatedImg")
@@ -14,10 +15,13 @@ POS_NODE = "16"  # positive prompt node id
 NEG_NODE = "40"  # negative prompt node id
 SEED_NODE = "3"  # KSampler node id
 
+# Use a global session for connection pooling
+session = requests.Session()
+
 def wait_for_comfy():
     try:
         print(f"Checking connection to ComfyUI at {COMFY}...")
-        r = requests.get(f"{COMFY}/system_stats", timeout=5)
+        r = session.get(f"{COMFY}/system_stats", timeout=5)
         r.raise_for_status()
         print("ComfyUI is reachable.")
     except requests.exceptions.ConnectionError:
@@ -43,13 +47,13 @@ def generate_image(prompt_text: str, negative_text: str = "text, watermark, logo
     workflow[NEG_NODE]["inputs"]["text"] = negative_text
 
     # Start generation
-    r = requests.post(f"{COMFY}/prompt", json={"prompt": workflow}, timeout=30)
+    r = session.post(f"{COMFY}/prompt", json={"prompt": workflow}, timeout=30)
     r.raise_for_status()
     prompt_id = r.json()["prompt_id"]
 
     # Poll until done
     while True:
-        h = requests.get(f"{COMFY}/history/{prompt_id}", timeout=30).json()
+        h = session.get(f"{COMFY}/history/{prompt_id}", timeout=30).json()
         if prompt_id in h:
             break
         time.sleep(0.2)
@@ -67,7 +71,7 @@ def generate_image(prompt_text: str, negative_text: str = "text, watermark, logo
         raise RuntimeError("No image output found. Ensure workflow ends with SaveImage node.")
 
     # Download image bytes
-    img_bytes = requests.get(
+    img_bytes = session.get(
         f"{COMFY}/view",
         params={
             "filename": img["filename"],
